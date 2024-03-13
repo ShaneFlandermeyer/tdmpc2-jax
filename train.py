@@ -20,7 +20,7 @@ if __name__ == '__main__':
   # Make env
   T = 1000
   seed_steps = max(5*T, 1000)
-  env = gym.make("Humanoid-v4")
+  env = gym.make("HalfCheetah-v4")
   env = gym.wrappers.ClipAction(env)
   env = gym.wrappers.RecordEpisodeStatistics(env)
   env.action_space.seed(seed)

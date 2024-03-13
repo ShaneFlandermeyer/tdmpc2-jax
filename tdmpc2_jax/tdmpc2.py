@@ -90,7 +90,7 @@ class TDMPC2(struct.PyTreeNode):
 
     action, plan = self.plan(z, prev_plan=prev_plan, train=train, key=key)
 
-    return np.asarray(action), plan
+    return np.array(action), plan
 
   @jax.jit
   def plan(self,
