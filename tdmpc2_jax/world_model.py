@@ -28,6 +28,8 @@ class WorldModel(struct.PyTreeNode):
   observation_space: gym.Space = struct.field(pytree_node=False)
   action_space: gym.Space = struct.field(pytree_node=False)
   action_dim: int = struct.field(pytree_node=False)
+  action_scale: jax.Array
+  action_bias: jax.Array
   # Architecture
   encoder_dim: int = struct.field(pytree_node=False)
   mlp_dim: int = struct.field(pytree_node=False)
@@ -66,6 +68,8 @@ class WorldModel(struct.PyTreeNode):
     dynamics_key, reward_key, value_key = jax.random.split(key, 3)
 
     action_dim = np.prod(action_space.shape)
+    action_scale = 0.5*(action_space.high - action_space.low)
+    action_bias = 0.5*(action_space.high + action_space.low)
 
     encoder = TrainState.create(
         apply_fn=encoder_module.apply,
@@ -176,6 +180,8 @@ class WorldModel(struct.PyTreeNode):
         observation_space=observation_space,
         action_space=action_space,
         action_dim=action_dim,
+        action_scale=action_scale,
+        action_bias=action_bias,
         # Models
         encoder=encoder,
         dynamics_model=dynamics_model,
@@ -226,14 +232,15 @@ class WorldModel(struct.PyTreeNode):
 
     # Sample action and compute logprobs
     eps = jax.random.normal(key, mu.shape)
-    action = mu + eps * jnp.exp(log_std)
+    x_t = mu + eps * jnp.exp(log_std)
     residual = (-0.5 * eps**2 - log_std).sum(-1)
-    log_probs = action.shape[-1] * (residual - 0.5 * jnp.log(2 * jnp.pi))
+    log_probs = x_t.shape[-1] * (residual - 0.5 * jnp.log(2 * jnp.pi))
 
     # Squash tanh
     mean = jnp.tanh(mu)
-    action = jnp.tanh(action)
-    log_probs -= jnp.log(jax.nn.relu(1 - action**2) + 1e-6).sum(-1)
+    y_t = jnp.tanh(x_t)
+    action = self.action_scale * y_t + self.action_bias
+    log_probs -= jnp.log(self.action_scale * (1 - action**2) + 1e-6).sum(-1)
 
     return action, mean, log_std, log_probs
 

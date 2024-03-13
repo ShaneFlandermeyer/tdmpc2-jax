@@ -90,6 +90,9 @@ class TDMPC2(struct.PyTreeNode):
 
     action, plan = self.plan(z, prev_plan=prev_plan, train=train, key=key)
 
+    # Scale action to the environment's action space
+    action = self.model.action_scale * action + self.model.action_bias
+
     return np.array(action), plan
 
   @jax.jit
@@ -288,7 +291,8 @@ class TDMPC2(struct.PyTreeNode):
       # Compute Q-values
       logits = self.model.Q(
           zs, actions, new_value_model.params, value_dropout_key2)
-      qs = two_hot_inv(logits, self.model.symlog_min, self.model.symlog_max, self.model.num_bins)
+      qs = two_hot_inv(logits, self.model.symlog_min,
+                       self.model.symlog_max, self.model.num_bins)
       qs = jnp.mean(qs, axis=0)
       # Apply running scale
       scale = percentile_normalization(qs[0], self.scale)
@@ -357,6 +361,6 @@ class TDMPC2(struct.PyTreeNode):
     logits = self.model.Q(
         next_z, next_action, self.model.target_value_model.params, key=dropout_key)
     Qs = two_hot_inv(logits,
-                         self.model.symlog_min, self.model.symlog_max, self.model.num_bins)
+                     self.model.symlog_min, self.model.symlog_max, self.model.num_bins)
     Q = jnp.min(Qs[inds], axis=0)
     return jax.lax.stop_gradient(reward + self.discount * Q)
