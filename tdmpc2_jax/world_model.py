@@ -207,9 +207,7 @@ class WorldModel(struct.PyTreeNode):
              ) -> Tuple[jax.Array, jax.Array]:
     z = jnp.concatenate([z, a], axis=-1)
     logits = self.reward_model.apply_fn({'params': params}, z)
-    reward = two_hot_inv(logits,
-                         self.symlog_min, self.symlog_max, self.num_bins)
-    return reward, logits
+    return logits
 
   @jax.jit
   def sample_actions(self,
@@ -246,5 +244,5 @@ class WorldModel(struct.PyTreeNode):
     logits = self.value_model.apply_fn(
         {'params': params}, z, rngs={'dropout': key})
 
-    Q = two_hot_inv(logits, self.symlog_min, self.symlog_max, self.num_bins)
-    return Q, logits
+    # Q = two_hot_inv(logits, self.symlog_min, self.symlog_max, self.num_bins)
+    return logits

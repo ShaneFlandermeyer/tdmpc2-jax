@@ -4,6 +4,7 @@ import jax
 from jaxtyping import PRNGKeyArray
 import optax
 
+from tdmpc2_jax.common.util import two_hot_inv
 from tdmpc2_jax.world_model import WorldModel
 import jax.numpy as jnp
 from tdmpc2_jax.common.loss import mse_loss, soft_crossentropy
@@ -223,9 +224,8 @@ class TDMPC2(struct.PyTreeNode):
 
       # Value and reward prediction logits
       _zs = zs[:-1]
-      _, q_logits = self.model.Q(_zs, action, value_params, value_dropout_key1)
-      _, reward_logits = self.model.reward(_zs, action, reward_params)
-
+      q_logits = self.model.Q(_zs, action, value_params, value_dropout_key1)
+      reward_logits = self.model.reward(_zs, action, reward_params)
 
       # Compute losses
       reward_loss, value_loss = 0, 0
@@ -286,8 +286,9 @@ class TDMPC2(struct.PyTreeNode):
           zs, params, key=policy_key)
 
       # Compute Q-values
-      qs, _ = self.model.Q(
+      logits = self.model.Q(
           zs, actions, new_value_model.params, value_dropout_key2)
+      qs = two_hot_inv(logits, self.model.symlog_min, self.model.symlog_max, self.model.num_bins)
       qs = jnp.mean(qs, axis=0)
       # Apply running scale
       scale = percentile_normalization(qs[0], self.scale)
@@ -320,7 +321,9 @@ class TDMPC2(struct.PyTreeNode):
   def estimate_value(self, z: jax.Array, actions: jax.Array, key: PRNGKeyArray) -> jax.Array:
     G, discount = 0, 1
     for t in range(self.horizon):
-      reward, _ = self.model.reward(z, actions[t], self.model.reward_model.params)
+      logits = self.model.reward(z, actions[t], self.model.reward_model.params)
+      reward = two_hot_inv(logits,
+                           self.model.symlog_min, self.model.symlog_max, self.model.num_bins)
       z = self.model.next(z, actions[t], self.model.dynamics_model.params)
       G += discount * reward
       discount *= self.discount
@@ -333,8 +336,10 @@ class TDMPC2(struct.PyTreeNode):
     all_inds = jnp.arange(0, self.model.num_value_nets)
     inds = jax.random.choice(ensemble_key, a=all_inds,
                              shape=(2, ), replace=False)
-    Qs, _ = self.model.Q(
+    logits = self.model.Q(
         z, next_action, self.model.value_model.params, key=dropout_key)
+    Qs = two_hot_inv(logits,
+                     self.model.symlog_min, self.model.symlog_max, self.model.num_bins)
     Q = jnp.mean(Qs[inds], axis=0)
     return jax.lax.stop_gradient(G + discount * Q)
 
@@ -349,7 +354,9 @@ class TDMPC2(struct.PyTreeNode):
     all_inds = jnp.arange(0, self.model.num_value_nets)
     inds = jax.random.choice(ensemble_key, a=all_inds,
                              shape=(2, ), replace=False)
-    Qs, _ = self.model.Q(
+    logits = self.model.Q(
         next_z, next_action, self.model.target_value_model.params, key=dropout_key)
+    Qs = two_hot_inv(logits,
+                         self.model.symlog_min, self.model.symlog_max, self.model.num_bins)
     Q = jnp.min(Qs[inds], axis=0)
     return jax.lax.stop_gradient(reward + self.discount * Q)

@@ -20,7 +20,8 @@ if __name__ == '__main__':
   # Make env
   T = 1000
   seed_steps = max(5*T, 1000)
-  env = gym.make("HalfCheetah-v4", max_episode_steps=T)
+  env = gym.make("Humanoid-v4")
+  env = gym.wrappers.ClipAction(env)
   env = gym.wrappers.RecordEpisodeStatistics(env)
   env.action_space.seed(seed)
   env.observation_space.seed(seed)
@@ -58,7 +59,7 @@ if __name__ == '__main__':
       'batch_size': 256,
       'discount': 0.99,
       'rho': 0.5,
-      'consistency_coef': 10,
+      'consistency_coef': 20,
       'reward_coef': 0.1,
       'value_coef': 0.1,
       'entropy_coef': 1e-4,
@@ -87,6 +88,7 @@ if __name__ == '__main__':
       seed=seed)
 
   # Training loop
+  c_loss, r_loss, v_loss, loss = 0, 0, 0, 0
   ep_count = 0
   prev_plan = None
   observation, _ = env.reset(seed=seed)
@@ -109,7 +111,12 @@ if __name__ == '__main__':
       observation, _ = env.reset(seed=seed)
       prev_plan = None
 
-      print("Episode reward:", info['episode']['r'])
+      r = info['episode']['r']
+      l = info['episode']['l']
+      print("Episode:", r, l)
+      print("Losses:", c_loss/l, r_loss/l, v_loss/l, loss/l)
+      
+      c_loss, r_loss, v_loss, loss = 0, 0, 0, 0
       ep_count += 1
 
     if i >= seed_steps:
@@ -128,3 +135,7 @@ if __name__ == '__main__':
         reward = batch['rewards'][1:]
         agent, train_info = agent.update(
             obs, action, reward, key=update_keys[j])
+        c_loss += train_info['consistency_loss']
+        r_loss += train_info['reward_loss']
+        v_loss += train_info['value_loss']
+        loss += train_info['total_loss']
