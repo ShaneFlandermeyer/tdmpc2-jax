@@ -1,0 +1,38 @@
+seed: 0
+max_steps: 1_000_000
+
+# World model
+world_model:
+  encoder_dim: 256
+  mlp_dim: 512
+  latent_dim: 512
+  value_dropout: 0.01
+  num_value_nets: 5
+  num_bins: 101
+  symlog_min: -10
+  symlog_max: 10
+  simnorm_dim: 8
+  learning_rate: 3e-4
+  encoder_learning_rate: 1e-4
+  tabulate: True
+
+# TDMPC2
+tdmpc2:
+  # Planning
+  horizon: 3
+  mppi_iterations: 6
+  population_size: 512
+  policy_prior_samples: 24
+  num_elites: 64
+  min_plan_std: 0.05
+  max_plan_std: 2
+  temperature: 0.5
+  # Optimization
+  batch_size: 256
+  discount: 0.99
+  rho: 0.5
+  consistency_coef: 20
+  reward_coef: 0.1
+  value_coef: 0.1
+  entropy_coef: 1e-4
+  tau: 0.01

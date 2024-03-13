@@ -2,6 +2,7 @@ import gymnasium as gym
 import numpy as np
 from typing import *
 import jax
+from collections import deque
 
 
 class EpisodicReplayBuffer():
@@ -11,10 +12,9 @@ class EpisodicReplayBuffer():
     self.data = jax.tree_map(lambda x: np.empty(
         (capacity,) + np.asarray(x).shape, np.asarray(x).dtype), dummy_input)
 
-    self.episode_inds = np.empty(capacity, dtype=int)
-    self.last_episode_ind = -1
-    self.episode_starts = []
-    self.episode_counts = []
+    self.last_episode_ind = None
+    self.episode_starts = deque()
+    self.episode_counts = deque()
 
     self.size = 0
     self.current_ind = 0
@@ -31,14 +31,12 @@ class EpisodicReplayBuffer():
 
     # Remove the oldest episode information if it gets overwritten
     if self.size == self.capacity:
-      current_ep = self.episode_inds[self.current_ind]
-      self.episode_counts[current_ep] -= 1
-      if self.episode_counts[current_ep] == 0:
-        self.episode_starts.pop(0)
-        self.episode_counts.pop(0)
+      self.episode_counts[0] -= 1
+      if self.episode_counts[0] == 0:
+        self.episode_starts.popleft()
+        self.episode_counts.popleft()
 
     # Increment episode information
-    self.episode_inds[self.current_ind] = episode_index
     if episode_index == self.last_episode_ind:
       self.episode_counts[-1] += 1
     else:
@@ -57,8 +55,8 @@ class EpisodicReplayBuffer():
 
     # Sample subsequences uniformly within episodes
     episode_inds = self.np_random.randint(0, len(counts), size=batch_size)
-    sequence_starts = np.round(
-        self.np_random.rand(batch_size) * (counts[episode_inds] - sequence_length)).astype(int)
+    sequence_starts = np.round(self.np_random.rand(batch_size) *
+                               (counts[episode_inds] - sequence_length)).astype(int)
     buffer_starts = episode_starts[episode_inds] + sequence_starts
     sequence_inds = buffer_starts[:, None] + np.arange(sequence_length)
 
@@ -79,6 +77,7 @@ if __name__ == '__main__':
     rb.insert({'obs': obs}, ep_count)
     if term or trunc:
       obs, _ = env.reset()
+      rb.sample(10, 3)
       ep_count += 1
 
   rb.sample(3, 2)

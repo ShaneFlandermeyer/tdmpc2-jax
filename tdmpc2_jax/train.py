@@ -9,62 +9,26 @@ from functools import partial
 from tdmpc2_jax import WorldModel, TDMPC2
 from tdmpc2_jax.data import EpisodicReplayBuffer
 import os
+import hydra
 
 os.environ['PYDEVD_DISABLE_FILE_VALIDATION'] = '1'
-
-if __name__ == '__main__':
-  # Args
-  seed = np.random.randint(2 ** 32 - 1)
-  max_steps = int(1e6)
-
-  # Make env
+@hydra.main(config_name='config', config_path='.')
+def train(cfg: dict):
+  seed = cfg['seed']
+  max_steps = cfg['max_steps']
+  model_config = cfg['world_model']
+  tdmpc_config = cfg['tdmpc2']
+  
   T = 1000
   seed_steps = max(5*T, 1000)
-  env = gym.make("HalfCheetah-v4")
+  env = gym.make("Humanoid-v4")
   env = gym.wrappers.ClipAction(env)
   env = gym.wrappers.RecordEpisodeStatistics(env)
   env.action_space.seed(seed)
   env.observation_space.seed(seed)
   np.random.seed(seed)
   rng = jax.random.PRNGKey(seed)
-
-  # Make agent
-  model_config = {
-      'observation_space': env.observation_space,
-      'action_space': env.action_space,
-      'encoder_dim': 256,
-      'mlp_dim': 512,
-      'latent_dim': 512,
-      'value_dropout': 0.01,
-      'num_value_nets': 5,
-      'num_bins': 101,
-      'symlog_min': -10,
-      'symlog_max': 10,
-      'simnorm_dim': 8,
-      'learning_rate': 3e-4,
-      'encoder_learning_rate': 1e-4,
-      'tabulate': True,
-  }
-  tdmpc_config = {
-      # Planning
-      'horizon': 3,
-      'mppi_iterations': 6,
-      'population_size': 512,
-      'policy_prior_samples': 24,
-      'num_elites': 64,
-      'min_plan_std': 0.05,
-      'max_plan_std': 2,
-      'temperature': 0.5,
-      # Optimization
-      'batch_size': 256,
-      'discount': 0.99,
-      'rho': 0.5,
-      'consistency_coef': 20,
-      'reward_coef': 0.1,
-      'value_coef': 0.1,
-      'entropy_coef': 1e-4,
-      'tau': 0.01,
-  }
+  
   rng, model_key = jax.random.split(rng, 2)
 
   encoder = nn.Sequential([
@@ -75,6 +39,8 @@ if __name__ == '__main__':
   ])
 
   model = WorldModel.create(
+      observation_space=env.observation_space,
+      action_space=env.action_space,
       **model_config, encoder_module=encoder, key=model_key)
   agent = TDMPC2.create(world_model=model, **tdmpc_config)
 
@@ -139,3 +105,8 @@ if __name__ == '__main__':
         r_loss += train_info['reward_loss']
         v_loss += train_info['value_loss']
         loss += train_info['total_loss']
+
+
+
+if __name__ == '__main__':
+  train()
