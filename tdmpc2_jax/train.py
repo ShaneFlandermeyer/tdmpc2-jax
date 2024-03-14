@@ -11,6 +11,7 @@ from tdmpc2_jax.data import EpisodicReplayBuffer
 import os
 import hydra
 from tdmpc2_jax.wrappers.action_repeat import RepeatAction
+import jax.numpy as jnp
 
 os.environ['PYDEVD_DISABLE_FILE_VALIDATION'] = '1'
 
@@ -33,14 +34,15 @@ def train(cfg: dict):
   np.random.seed(seed)
   rng = jax.random.PRNGKey(seed)
 
+  dtype = jnp.dtype(model_config['dtype'])
   rng, model_key = jax.random.split(rng, 2)
-
   encoder = nn.Sequential(
-      [NormedLinear(encoder_config['encoder_dim'], activation=mish)
+      [NormedLinear(encoder_config['encoder_dim'], activation=mish, dtype=dtype)
        for _ in range(encoder_config['num_encoder_layers']-1)] + [
           NormedLinear(model_config['latent_dim'],
                        activation=partial(simnorm,
-                                          simplex_dim=model_config['simnorm_dim']))
+                                          simplex_dim=model_config['simnorm_dim']),
+                       dtype=dtype)
       ])
 
   model = WorldModel.create(
@@ -62,7 +64,7 @@ def train(cfg: dict):
       seed=seed)
 
   # Training loop
-  c_loss, r_loss, v_loss, loss = 0, 0, 0, 0
+  c_loss, r_loss, v_loss, d_loss, loss = 0, 0, 0, 0, 0
   ep_count = 0
   prev_plan = None
   observation, _ = env.reset(seed=seed)
@@ -90,9 +92,9 @@ def train(cfg: dict):
       l = info['episode']['l']
       print(f"Episode: r = {r}, l = {l}")
       print(
-          f"Losses: c = {c_loss/l} r = {r_loss/l} v = {v_loss/l} total = {loss/l}")
+          f"Losses: c = {c_loss/l} r = {r_loss/l} v = {v_loss/l} d = {d_loss/l} total = {loss/l}")
 
-      c_loss, r_loss, v_loss, loss = 0, 0, 0, 0
+      c_loss, r_loss, v_loss, d_loss, loss = 0, 0, 0, 0, 0
       ep_count += 1
 
     if i >= seed_steps:
@@ -107,7 +109,7 @@ def train(cfg: dict):
         batch = replay_buffer.sample(
             tdmpc_config['batch_size'], tdmpc_config['horizon']+1)
         obs = batch['observations']
-        done = batch['dones']
+        done = batch['dones'][1:]
         action = batch['actions'][1:]
         reward = batch['rewards'][1:]
         agent, train_info = agent.update(
@@ -115,6 +117,7 @@ def train(cfg: dict):
         c_loss += train_info['consistency_loss']
         r_loss += train_info['reward_loss']
         v_loss += train_info['value_loss']
+        d_loss += train_info['continue_loss']
         loss += train_info['total_loss']
 
 
