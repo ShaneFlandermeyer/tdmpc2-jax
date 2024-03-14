@@ -337,14 +337,11 @@ class TDMPC2(struct.PyTreeNode):
         z, self.model.policy_model.params, key=action_key)[0]
 
     # Sample two Q-values from the ensemble
-    all_inds = jnp.arange(0, self.model.num_value_nets)
-    inds = jax.random.choice(ensemble_key, a=all_inds,
-                             shape=(2, ), replace=False)
     logits = self.model.Q(
         z, next_action, self.model.value_model.params, key=dropout_key)
     Qs = two_hot_inv(logits,
                      self.model.symlog_min, self.model.symlog_max, self.model.num_bins)
-    Q = jnp.mean(Qs[inds], axis=0)
+    Q = jnp.mean(Qs, axis=0)
     return jax.lax.stop_gradient(G + discount * Q)
 
   @jax.jit

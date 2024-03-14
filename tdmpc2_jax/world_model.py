@@ -31,7 +31,6 @@ class WorldModel(struct.PyTreeNode):
   action_scale: jax.Array
   action_bias: jax.Array
   # Architecture
-  encoder_dim: int = struct.field(pytree_node=False)
   mlp_dim: int = struct.field(pytree_node=False)
   latent_dim: int = struct.field(pytree_node=False)
   num_value_nets: int = struct.field(pytree_node=False)
@@ -47,7 +46,6 @@ class WorldModel(struct.PyTreeNode):
              # Models
              encoder_module: nn.Module,
              # Architecture
-             encoder_dim: int,
              mlp_dim: int,
              latent_dim: int,
              value_dropout: float,
@@ -123,7 +121,7 @@ class WorldModel(struct.PyTreeNode):
         params=policy_module.init(key, jnp.zeros(latent_dim))['params'],
         tx=optax.chain(
             optax.clip_by_global_norm(max_grad_norm),
-            optax.adam(learning_rate, eps=1e-5),
+            optax.adam(learning_rate),
         ))
 
     # Return/value model (ensemble)
@@ -190,7 +188,6 @@ class WorldModel(struct.PyTreeNode):
         value_model=value_model,
         target_value_model=target_value_model,
         # Architecture
-        encoder_dim=encoder_dim,
         mlp_dim=mlp_dim,
         latent_dim=latent_dim,
         num_value_nets=num_value_nets,

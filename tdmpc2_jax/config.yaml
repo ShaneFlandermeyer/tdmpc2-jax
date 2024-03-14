@@ -1,9 +1,13 @@
 seed: 0
 max_steps: 1_000_000
 
+# Encoder
+encoder:
+  encoder_dim: 256
+  num_encoder_layers: 2
+
 # World model
 world_model:
-  encoder_dim: 256
   mlp_dim: 512
   latent_dim: 512
   value_dropout: 0.01
