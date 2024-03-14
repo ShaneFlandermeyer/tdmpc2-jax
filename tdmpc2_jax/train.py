@@ -57,6 +57,7 @@ def train(cfg: dict):
           observations=env.observation_space.sample(),
           actions=env.action_space.sample(),
           rewards=1.0,
+          dones=True,
       ),
       seed=seed)
 
@@ -77,7 +78,8 @@ def train(cfg: dict):
     replay_buffer.insert(dict(
         observations=observation,
         actions=action,
-        rewards=reward),
+        rewards=reward,
+        dones=terminated),
         episode_index=ep_count)
 
     if terminated or truncated:
@@ -86,7 +88,7 @@ def train(cfg: dict):
 
       r = info['episode']['r']
       l = info['episode']['l']
-      print("Episode:", r, l)
+      print(f"Episode: r = {r}, l = {l}")
       print(
           f"Losses: c = {c_loss/l} r = {r_loss/l} v = {v_loss/l} total = {loss/l}")
 
@@ -105,10 +107,11 @@ def train(cfg: dict):
         batch = replay_buffer.sample(
             tdmpc_config['batch_size'], tdmpc_config['horizon']+1)
         obs = batch['observations']
+        done = batch['dones']
         action = batch['actions'][1:]
         reward = batch['rewards'][1:]
         agent, train_info = agent.update(
-            obs, action, reward, key=update_keys[j])
+            obs, action, reward, done, key=update_keys[j])
         c_loss += train_info['consistency_loss']
         r_loss += train_info['reward_loss']
         v_loss += train_info['value_loss']

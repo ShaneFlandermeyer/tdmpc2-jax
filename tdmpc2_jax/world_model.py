@@ -13,7 +13,7 @@ import jax.numpy as jnp
 import optax
 from tdmpc2_jax.networks import Ensemble
 import gymnasium as gym
-from tdmpc2_jax.common.util import two_hot_inv
+from tdmpc2_jax.common.util import symlog, two_hot_inv
 
 
 class WorldModel(struct.PyTreeNode):
@@ -198,7 +198,7 @@ class WorldModel(struct.PyTreeNode):
 
   @jax.jit
   def encode(self, obs: np.ndarray, params: Dict) -> jax.Array:
-    return self.encoder.apply_fn({'params': params}, obs)
+    return self.encoder.apply_fn({'params': params}, symlog(obs))
 
   @jax.jit
   def next(self, z: jax.Array, a: jax.Array, params: Dict) -> jax.Array:
@@ -210,7 +210,9 @@ class WorldModel(struct.PyTreeNode):
              ) -> Tuple[jax.Array, jax.Array]:
     z = jnp.concatenate([z, a], axis=-1)
     logits = self.reward_model.apply_fn({'params': params}, z)
-    return logits
+    reward = two_hot_inv(logits, self.symlog_min,
+                         self.symlog_max, self.num_bins)
+    return reward, logits
 
   @jax.jit
   def sample_actions(self,
@@ -248,5 +250,5 @@ class WorldModel(struct.PyTreeNode):
     logits = self.value_model.apply_fn(
         {'params': params}, z, rngs={'dropout': key})
 
-    # Q = two_hot_inv(logits, self.symlog_min, self.symlog_max, self.num_bins)
-    return logits
+    Q = two_hot_inv(logits, self.symlog_min, self.symlog_max, self.num_bins)
+    return Q, logits
