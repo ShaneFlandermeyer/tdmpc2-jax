@@ -24,6 +24,7 @@ class WorldModel(struct.PyTreeNode):
   policy_model: TrainState
   value_model: TrainState
   target_value_model: TrainState
+  continue_model: TrainState
   # Spaces
   observation_space: gym.Space = struct.field(pytree_node=False)
   action_space: gym.Space = struct.field(pytree_node=False)
@@ -35,6 +36,7 @@ class WorldModel(struct.PyTreeNode):
   num_bins: int = struct.field(pytree_node=False)
   symlog_min: float
   symlog_max: float
+  predict_continues: bool = struct.field(pytree_node=False)
 
   @classmethod
   def create(cls,
@@ -52,11 +54,12 @@ class WorldModel(struct.PyTreeNode):
              symlog_min: float,
              symlog_max: float,
              simnorm_dim: int,
+             predict_continues: bool,
              # Optimization
              learning_rate: float,
              encoder_learning_rate: float,
              max_grad_norm: float = 10,
-             # Debugging
+             # Misc
              tabulate: bool = False,
              dtype: jnp.dtype = jnp.float32,
              *,
@@ -118,7 +121,7 @@ class WorldModel(struct.PyTreeNode):
         params=policy_module.init(key, jnp.zeros(latent_dim))['params'],
         tx=optax.chain(
             optax.clip_by_global_norm(max_grad_norm),
-            optax.adam(learning_rate),
+            optax.adam(learning_rate, eps=1e-5),
         ))
 
     # Return/value model (ensemble)
@@ -142,6 +145,21 @@ class WorldModel(struct.PyTreeNode):
         apply_fn=value_ensemble.apply,
         params=copy.deepcopy(value_model.params),
         tx=optax.GradientTransformation(lambda _: None, lambda _: None))
+
+    if predict_continues:
+      continue_module = nn.Sequential([
+          NormedLinear(mlp_dim, activation=mish, dtype=dtype),
+          NormedLinear(mlp_dim, activation=mish, dtype=dtype),
+          nn.Dense(1, kernel_init=nn.initializers.zeros)
+      ])
+      continue_model = TrainState.create(
+          apply_fn=continue_module.apply,
+          params=continue_module.init(
+              key, jnp.zeros(latent_dim))['params'],
+          tx=optax.chain(
+              optax.clip_by_global_norm(max_grad_norm),
+              optax.adam(learning_rate),
+          ))
 
     if tabulate:
       print("Encoder")
@@ -183,6 +201,7 @@ class WorldModel(struct.PyTreeNode):
         policy_model=policy_model,
         value_model=value_model,
         target_value_model=target_value_model,
+        continue_model=continue_model,
         # Architecture
         mlp_dim=mlp_dim,
         latent_dim=latent_dim,
@@ -190,6 +209,7 @@ class WorldModel(struct.PyTreeNode):
         num_bins=num_bins,
         symlog_min=float(symlog_min),
         symlog_max=float(symlog_max),
+        predict_continues=predict_continues,
     )
 
   @jax.jit

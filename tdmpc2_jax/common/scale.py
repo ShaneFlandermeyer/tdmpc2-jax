@@ -25,7 +25,7 @@ def percentile_normalization(x: jax.Array,
                              tau: float = 0.01) -> jax.Array:
   # Compute percentiles for the input values.
   percentiles = percentile(x, percentile_range)
-  scale = jnp.clip(percentiles[1] - percentiles[0], 1, None)
+  scale = percentiles[1] - percentiles[0]
 
   return optax.incremental_update(scale, prev_scale, tau)
 

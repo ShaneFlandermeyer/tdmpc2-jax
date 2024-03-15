@@ -16,12 +16,13 @@ world_model:
   simnorm_dim: 8
   learning_rate: 3e-4
   encoder_learning_rate: 1e-4
-  tabulate: False
+  predict_continues: True
   dtype: bfloat16
+  tabulate: False
 
 tdmpc2:
   # Planning
-  mpc: False
+  mpc: True
   horizon: 3
   mppi_iterations: 6
   population_size: 512
@@ -34,8 +35,9 @@ tdmpc2:
   batch_size: 256
   discount: 0.99
   rho: 0.5
-  consistency_coef: 10
+  consistency_coef: 20
   reward_coef: 0.1
+  continue_coef: 1
   value_coef: 0.1
   entropy_coef: 1e-4
   tau: 0.01

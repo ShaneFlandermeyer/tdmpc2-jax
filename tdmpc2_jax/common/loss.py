@@ -22,3 +22,8 @@ def soft_crossentropy(pred_logits: jax.Array, target: jax.Array,
   pred = jax.nn.log_softmax(pred_logits, axis=-1)
   target = two_hot(target, low, high, num_bins)
   return -(pred * target).sum(axis=-1)
+
+
+def binary_crossentropy(pred_logits: jax.Array, target: jax.Array) -> jax.Array:
+  pred = jax.nn.sigmoid(pred_logits)
+  return -jnp.mean(target * jnp.log(pred) + (1 - target) * jnp.log(1 - pred))

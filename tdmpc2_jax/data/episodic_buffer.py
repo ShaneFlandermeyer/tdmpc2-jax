@@ -61,6 +61,11 @@ class EpisodicReplayBuffer():
     buffer_starts = episode_starts[episode_inds] + sequence_starts
     sequence_inds = buffer_starts[:, None] + np.arange(sequence_length)
 
+    # Debug: Sampling without respecting episode boundaries
+    # buffer_starts = self.np_random.randint(0, self.size, size=batch_size)
+    # sequence_inds = buffer_starts[:, None] + np.arange(sequence_length)
+    # sequence_inds = sequence_inds % self.capacity
+
     return jax.tree_map(lambda x: np.swapaxes(x[sequence_inds], 0, 1),
                         self.data)
 

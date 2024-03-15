@@ -71,7 +71,7 @@ def train(cfg: dict):
       seed=seed)
 
   # Training loop
-  c_loss, r_loss, v_loss, loss = 0, 0, 0, 0
+  ep_info = {}
   ep_count = 0
   prev_plan = None
   observation, _ = env.reset(seed=seed)
@@ -100,10 +100,9 @@ def train(cfg: dict):
       r = info['episode']['r']
       l = info['episode']['l']
       print(f"Episode: r = {r}, l = {l}")
-      print(
-          f"Losses: c = {c_loss/l} r = {r_loss/l} v = {v_loss/l} total = {loss/l}")
-
-      c_loss, r_loss, v_loss, loss = 0, 0, 0, 0
+      # Print the mean of all episode info
+      if len(ep_info) > 0:
+        print(jax.tree_map(lambda x: np.mean(x), ep_info))
       ep_count += 1
 
     if i >= seed_steps:
@@ -124,10 +123,11 @@ def train(cfg: dict):
             next_observations=batch['next_observation'],
             dones=batch['done'],
             key=update_keys[j])
-        c_loss += train_info['consistency_loss']
-        r_loss += train_info['reward_loss']
-        v_loss += train_info['value_loss']
-        loss += train_info['total_loss']
+        # Append all episode info
+        if len(ep_info) == 0:
+          ep_info = train_info
+        ep_info = jax.tree_map(
+            lambda x, y: np.append(np.array(x), np.array(y)), ep_info, train_info)
 
 
 if __name__ == '__main__':
