@@ -10,7 +10,7 @@ from tdmpc2_jax import WorldModel, TDMPC2
 from tdmpc2_jax.data import EpisodicReplayBuffer
 import os
 import hydra
-from tdmpc2_jax.wrappers.action_repeat import RepeatAction
+from tdmpc2_jax.wrappers.action_scale import RescaleActions
 import jax.numpy as jnp
 
 os.environ['PYDEVD_DISABLE_FILE_VALIDATION'] = '1'
@@ -27,6 +27,7 @@ def train(cfg: dict):
   T = 500
   seed_steps = max(5*T, 1000)
   env = gym.make("Humanoid-v4")
+  env = RescaleActions(env)
   # env = RepeatAction(env, repeat=2)
   env = gym.wrappers.RecordEpisodeStatistics(env)
   env.action_space.seed(seed)

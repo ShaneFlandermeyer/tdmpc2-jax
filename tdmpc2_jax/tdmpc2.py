@@ -92,8 +92,6 @@ class TDMPC2(struct.PyTreeNode):
 
     if self.mpc:
       action, plan = self.plan(z, prev_plan=prev_plan, train=train, key=key)
-      # Scale action to the environment's action space
-      action = self.model.action_scale * action + self.model.action_bias
     else:
       action = self.model.sample_actions(
           z, self.model.policy_model.params, key=key)[0].squeeze()
