@@ -56,7 +56,8 @@ class EpisodicReplayBuffer():
     # Sample subsequences uniformly within episodes
     episode_inds = self.np_random.randint(0, len(counts), size=batch_size)
     sequence_starts = np.round(self.np_random.rand(batch_size) *
-                               (counts[episode_inds] - sequence_length)).astype(int)
+                               (counts[episode_inds] - sequence_length)
+                               ).astype(int)
     buffer_starts = episode_starts[episode_inds] + sequence_starts
     sequence_inds = buffer_starts[:, None] + np.arange(sequence_length)
 

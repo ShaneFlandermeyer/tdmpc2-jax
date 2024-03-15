@@ -3,12 +3,12 @@ max_steps: 1_000_000
 
 encoder:
   encoder_dim: 256
-  num_encoder_layers: 2
+  num_encoder_layers: 1
 
 world_model:
-  mlp_dim: 512
-  latent_dim: 512
-  value_dropout: 0.01
+  mlp_dim: 256
+  latent_dim: 256
+  value_dropout: 0
   num_value_nets: 5
   num_bins: 101
   symlog_min: -10
@@ -21,7 +21,8 @@ world_model:
 
 tdmpc2:
   # Planning
-  horizon: 3
+  mpc: False
+  horizon: 1
   mppi_iterations: 6
   population_size: 512
   policy_prior_samples: 24
@@ -32,9 +33,9 @@ tdmpc2:
   # Optimization
   batch_size: 256
   discount: 0.99
-  rho: 0.5
-  consistency_coef: 20
-  reward_coef: 0.1
+  rho: 0
+  consistency_coef: 0
+  reward_coef: 0
   value_coef: 0.1
   entropy_coef: 1e-4
   tau: 0.01
