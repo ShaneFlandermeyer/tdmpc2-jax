@@ -16,7 +16,7 @@ import jax.numpy as jnp
 os.environ['PYDEVD_DISABLE_FILE_VALIDATION'] = '1'
 
 
-@hydra.main(config_name='sac_config', config_path='.')
+@hydra.main(config_name='config', config_path='.')
 def train(cfg: dict):
   seed = cfg['seed']
   max_steps = cfg['max_steps']

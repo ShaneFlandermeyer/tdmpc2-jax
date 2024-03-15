@@ -169,7 +169,6 @@ class TDMPC2(struct.PyTreeNode):
       actions = actions.at[:, self.policy_prior_samples:].set(
           mean[:, None, :] + std[:, None, :] * noise[i])
       actions = jnp.clip(actions, -1, 1)
-      # TODO: I think this breaks if the action space is not [-1, 1]
 
       # Compute elite actions
       value = self.estimate_value(z, actions, key=value_keys[i])
