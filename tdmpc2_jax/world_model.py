@@ -24,12 +24,11 @@ class WorldModel(struct.PyTreeNode):
   policy_model: TrainState
   value_model: TrainState
   target_value_model: TrainState
+  continue_model: TrainState
   # Spaces
   observation_space: gym.Space = struct.field(pytree_node=False)
   action_space: gym.Space = struct.field(pytree_node=False)
   action_dim: int = struct.field(pytree_node=False)
-  action_scale: jax.Array
-  action_bias: jax.Array
   # Architecture
   mlp_dim: int = struct.field(pytree_node=False)
   latent_dim: int = struct.field(pytree_node=False)
@@ -37,6 +36,7 @@ class WorldModel(struct.PyTreeNode):
   num_bins: int = struct.field(pytree_node=False)
   symlog_min: float
   symlog_max: float
+  predict_continues: bool = struct.field(pytree_node=False)
 
   @classmethod
   def create(cls,
@@ -54,20 +54,20 @@ class WorldModel(struct.PyTreeNode):
              symlog_min: float,
              symlog_max: float,
              simnorm_dim: int,
+             predict_continues: bool,
              # Optimization
              learning_rate: float,
              encoder_learning_rate: float,
              max_grad_norm: float = 10,
-             # Debugging
+             # Misc
              tabulate: bool = False,
+             dtype: jnp.dtype = jnp.float32,
              *,
              key: PRNGKeyArray,
              ):
     dynamics_key, reward_key, value_key = jax.random.split(key, 3)
 
     action_dim = np.prod(action_space.shape)
-    action_scale = 0.5*(action_space.high - action_space.low)
-    action_bias = 0.5*(action_space.high + action_space.low)
 
     encoder = TrainState.create(
         apply_fn=encoder_module.apply,
@@ -80,10 +80,10 @@ class WorldModel(struct.PyTreeNode):
 
     # Latent forward dynamics model
     dynamics_module = nn.Sequential([
-        NormedLinear(mlp_dim, activation=mish),
-        NormedLinear(mlp_dim, activation=mish),
+        NormedLinear(mlp_dim, activation=mish, dtype=dtype),
+        NormedLinear(mlp_dim, activation=mish, dtype=dtype),
         NormedLinear(latent_dim, activation=partial(
-            simnorm, simplex_dim=simnorm_dim))
+            simnorm, simplex_dim=simnorm_dim), dtype=dtype)
     ])
     dynamics_model = TrainState.create(
         apply_fn=dynamics_module.apply,
@@ -96,8 +96,8 @@ class WorldModel(struct.PyTreeNode):
 
     # Transition reward model
     reward_module = nn.Sequential([
-        NormedLinear(mlp_dim, activation=mish),
-        NormedLinear(mlp_dim, activation=mish),
+        NormedLinear(mlp_dim, activation=mish, dtype=dtype),
+        NormedLinear(mlp_dim, activation=mish, dtype=dtype),
         nn.Dense(num_bins, kernel_init=nn.initializers.zeros)
     ])
     reward_model = TrainState.create(
@@ -111,8 +111,8 @@ class WorldModel(struct.PyTreeNode):
 
     # Policy model
     policy_module = nn.Sequential([
-        NormedLinear(mlp_dim, activation=mish),
-        NormedLinear(mlp_dim, activation=mish),
+        NormedLinear(mlp_dim, activation=mish, dtype=dtype),
+        NormedLinear(mlp_dim, activation=mish, dtype=dtype),
         nn.Dense(2*action_dim,
                  kernel_init=nn.initializers.truncated_normal(0.02))
     ])
@@ -121,14 +121,15 @@ class WorldModel(struct.PyTreeNode):
         params=policy_module.init(key, jnp.zeros(latent_dim))['params'],
         tx=optax.chain(
             optax.clip_by_global_norm(max_grad_norm),
-            optax.adam(learning_rate),
+            optax.adam(learning_rate, eps=1e-5),
         ))
 
     # Return/value model (ensemble)
     value_param_key, value_dropout_key = jax.random.split(value_key)
     value_base = partial(nn.Sequential, [
-        NormedLinear(mlp_dim, activation=mish, dropout_rate=value_dropout),
-        NormedLinear(mlp_dim, activation=mish),
+        NormedLinear(mlp_dim, activation=mish,
+                     dropout_rate=value_dropout, dtype=dtype),
+        NormedLinear(mlp_dim, activation=mish, dtype=dtype),
         nn.Dense(num_bins, kernel_init=nn.initializers.zeros)])
     value_ensemble = Ensemble(value_base, num=num_value_nets)
     value_model = TrainState.create(
@@ -144,6 +145,23 @@ class WorldModel(struct.PyTreeNode):
         apply_fn=value_ensemble.apply,
         params=copy.deepcopy(value_model.params),
         tx=optax.GradientTransformation(lambda _: None, lambda _: None))
+
+    if predict_continues:
+      continue_module = nn.Sequential([
+          NormedLinear(mlp_dim, activation=mish, dtype=dtype),
+          NormedLinear(mlp_dim, activation=mish, dtype=dtype),
+          nn.Dense(1, kernel_init=nn.initializers.zeros)
+      ])
+      continue_model = TrainState.create(
+          apply_fn=continue_module.apply,
+          params=continue_module.init(
+              key, jnp.zeros(latent_dim))['params'],
+          tx=optax.chain(
+              optax.clip_by_global_norm(max_grad_norm),
+              optax.adam(learning_rate),
+          ))
+    else:
+      continue_model = None
 
     if tabulate:
       print("Encoder")
@@ -173,13 +191,17 @@ class WorldModel(struct.PyTreeNode):
           {'params': value_param_key, 'dropout': value_dropout_key},
           jnp.ones(latent_dim + action_dim), compute_flops=True))
 
+      if predict_continues:
+        print("Continue Model")
+        print("--------------")
+        print(continue_module.tabulate(jax.random.key(0), jnp.ones(
+            latent_dim), compute_flops=True))
+
     return cls(
         # Spaces
         observation_space=observation_space,
         action_space=action_space,
         action_dim=action_dim,
-        action_scale=action_scale,
-        action_bias=action_bias,
         # Models
         encoder=encoder,
         dynamics_model=dynamics_model,
@@ -187,6 +209,7 @@ class WorldModel(struct.PyTreeNode):
         policy_model=policy_model,
         value_model=value_model,
         target_value_model=target_value_model,
+        continue_model=continue_model,
         # Architecture
         mlp_dim=mlp_dim,
         latent_dim=latent_dim,
@@ -194,6 +217,7 @@ class WorldModel(struct.PyTreeNode):
         num_bins=num_bins,
         symlog_min=float(symlog_min),
         symlog_max=float(symlog_max),
+        predict_continues=predict_continues,
     )
 
   @jax.jit
@@ -237,9 +261,8 @@ class WorldModel(struct.PyTreeNode):
 
     # Squash tanh
     mean = jnp.tanh(mu)
-    y_t = jnp.tanh(x_t)
-    action = self.action_scale * y_t + self.action_bias
-    log_probs -= jnp.log(self.action_scale * (1 - action**2) + 1e-6).sum(-1)
+    action = jnp.tanh(x_t)
+    log_probs -= jnp.log((1 - action**2) + 1e-6).sum(-1)
 
     return action, mean, log_std, log_probs
 
