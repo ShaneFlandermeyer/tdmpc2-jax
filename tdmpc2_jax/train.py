@@ -26,7 +26,7 @@ def train(cfg: dict):
 
   T = 500
   seed_steps = max(5*T, 1000)
-  env = gym.make("Humanoid-v4")
+  env = gym.make("HalfCheetah-v4")
   env = RescaleActions(env)
   # env = RepeatAction(env, repeat=2)
   env = gym.wrappers.RecordEpisodeStatistics(env)
@@ -69,7 +69,7 @@ def train(cfg: dict):
           done=True,
       ),
       seed=seed,
-      respect_episode_boundaries=False)
+      respect_episode_boundaries=True)
 
   # Training loop
   ep_info = {}

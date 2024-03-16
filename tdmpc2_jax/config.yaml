@@ -16,7 +16,7 @@ world_model:
   simnorm_dim: 8
   learning_rate: 3e-4
   encoder_learning_rate: 1e-4
-  predict_continues: True
+  predict_continues: False
   dtype: bfloat16
   tabulate: False
 

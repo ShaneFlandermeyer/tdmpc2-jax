@@ -160,6 +160,8 @@ class WorldModel(struct.PyTreeNode):
               optax.clip_by_global_norm(max_grad_norm),
               optax.adam(learning_rate),
           ))
+    else:
+      continue_model = None
 
     if tabulate:
       print("Encoder")
@@ -188,6 +190,12 @@ class WorldModel(struct.PyTreeNode):
       print(value_ensemble.tabulate(
           {'params': value_param_key, 'dropout': value_dropout_key},
           jnp.ones(latent_dim + action_dim), compute_flops=True))
+
+      if predict_continues:
+        print("Continue Model")
+        print("--------------")
+        print(continue_module.tabulate(jax.random.key(0), jnp.ones(
+            latent_dim), compute_flops=True))
 
     return cls(
         # Spaces

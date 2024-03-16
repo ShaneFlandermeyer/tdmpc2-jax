@@ -223,6 +223,9 @@ class TDMPC2(struct.PyTreeNode):
                             value_params: Dict,
                             reward_params: Dict,
                             continue_params: Dict):
+      discount = jnp.ones((self.horizon+1, self.batch_size))
+      horizon = jnp.zeros(self.batch_size)
+
       next_z = sg(self.model.encode(next_observations, encoder_params))
       td_targets = self.td_target(next_z, rewards, dones, key=target_dropout)
 
@@ -231,16 +234,15 @@ class TDMPC2(struct.PyTreeNode):
       z = self.model.encode(observations[0], encoder_params)
       zs = zs.at[0].set(z)
       consistency_loss = jnp.zeros(self.batch_size)
-      discount = jnp.ones(self.batch_size)
-      horizon = jnp.zeros(self.batch_size)
       for t in range(self.horizon):
         z = self.model.next(z, actions[t], dynamics_params)
         consistency_loss += jnp.mean(
-            (z - next_z[t])**2 * discount[:, None], -1)
+            (z - next_z[t])**2 * discount[t][:, None], -1)
         zs = zs.at[t+1].set(z)
 
-        horizon += (discount > 0)
-        discount *= self.rho * (1 - dones[t])
+        horizon += (discount[t] > 0)
+        discount = discount.at[t+1].set(
+            discount[t] * self.rho * (1 - dones[t]))
 
       # Get logits for loss computations
       _, q_logits = self.model.Q(
@@ -253,24 +255,21 @@ class TDMPC2(struct.PyTreeNode):
       reward_loss = jnp.zeros(self.batch_size)
       value_loss = jnp.zeros(self.batch_size)
       continue_loss = jnp.zeros(self.batch_size)
-      discount = jnp.ones(self.batch_size)
       for t in range(self.horizon):
         reward_loss += soft_crossentropy(reward_logits[t], rewards[t],
                                          self.model.symlog_min,
                                          self.model.symlog_max,
-                                         self.model.num_bins) * discount
+                                         self.model.num_bins) * discount[t]
 
         if self.model.predict_continues:
           continue_loss += optax.sigmoid_binary_cross_entropy(
-              continue_logits[t], 1 - dones[t]) * discount
+              continue_logits[t], 1 - dones[t]) * discount[t]
 
         for q in range(self.model.num_value_nets):
           value_loss += soft_crossentropy(q_logits[q, t], td_targets[t],
                                           self.model.symlog_min,
                                           self.model.symlog_max,
-                                          self.model.num_bins) * discount
-          
-        discount *= self.rho * (1 - dones[t])
+                                          self.model.num_bins) * discount[t]
 
       consistency_loss = (consistency_loss / horizon).mean()
       reward_loss = (reward_loss / horizon).mean()
@@ -299,7 +298,7 @@ class TDMPC2(struct.PyTreeNode):
             self.model.dynamics_model.params,
             self.model.value_model.params,
             self.model.reward_model.params,
-            self.model.continue_model.params)
+            self.model.continue_model.params if self.model.predict_continues else None)
     zs = model_info.pop('zs')
 
     new_encoder = self.model.encoder.apply_gradients(grads=encoder_grads)
@@ -314,8 +313,11 @@ class TDMPC2(struct.PyTreeNode):
             new_value_model.params,
             self.model.target_value_model.params,
             self.tau))
-    new_continue_model = self.model.continue_model.apply_gradients(
-        grads=continue_grads)
+    if self.model.predict_continues:
+      new_continue_model = self.model.continue_model.apply_gradients(
+          grads=continue_grads)
+    else:
+      new_continue_model = self.model.continue_model
 
     # Update policy
     def policy_loss_fn(params: Dict):
