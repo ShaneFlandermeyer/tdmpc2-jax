@@ -10,7 +10,8 @@ from tdmpc2_jax import WorldModel, TDMPC2
 from tdmpc2_jax.data import EpisodicReplayBuffer
 import os
 import hydra
-from tdmpc2_jax.wrappers.action_repeat import RepeatAction
+from tdmpc2_jax.wrappers.action_scale import RescaleActions
+import jax.numpy as jnp
 
 os.environ['PYDEVD_DISABLE_FILE_VALIDATION'] = '1'
 
@@ -26,6 +27,7 @@ def train(cfg: dict):
   T = 500
   seed_steps = max(5*T, 1000)
   env = gym.make("HalfCheetah-v4")
+  env = RescaleActions(env)
   # env = RepeatAction(env, repeat=2)
   env = gym.wrappers.RecordEpisodeStatistics(env)
   env.action_space.seed(seed)
@@ -33,14 +35,20 @@ def train(cfg: dict):
   np.random.seed(seed)
   rng = jax.random.PRNGKey(seed)
 
+  dtype = jnp.dtype(model_config['dtype'])
   rng, model_key = jax.random.split(rng, 2)
-
   encoder = nn.Sequential(
-      [NormedLinear(encoder_config['encoder_dim'], activation=mish)
-       for _ in range(encoder_config['num_encoder_layers']-1)] + [
-          NormedLinear(model_config['latent_dim'],
-                       activation=partial(simnorm,
-                                          simplex_dim=model_config['simnorm_dim']))
+      [
+          NormedLinear(encoder_config['encoder_dim'],
+                       activation=mish, dtype=dtype)
+          for _ in range(encoder_config['num_encoder_layers']-1)
+      ] +
+      [
+          NormedLinear(
+              model_config['latent_dim'],
+              activation=partial(
+                  simnorm, simplex_dim=model_config['simnorm_dim']),
+              dtype=dtype)
       ])
 
   model = WorldModel.create(
@@ -54,15 +62,17 @@ def train(cfg: dict):
   replay_buffer = EpisodicReplayBuffer(
       capacity=max_steps,
       dummy_input=dict(
-          observations=env.observation_space.sample(),
-          actions=env.action_space.sample(),
-          rewards=1.0,
-          dones=True,
+          observation=env.observation_space.sample(),
+          action=env.action_space.sample(),
+          reward=1.0,
+          next_observation=env.observation_space.sample(),
+          done=True,
       ),
-      seed=seed)
+      seed=seed,
+      respect_episode_boundaries=True)
 
   # Training loop
-  c_loss, r_loss, v_loss, loss = 0, 0, 0, 0
+  ep_info = {}
   ep_count = 0
   prev_plan = None
   observation, _ = env.reset(seed=seed)
@@ -74,13 +84,15 @@ def train(cfg: dict):
       action, prev_plan = agent.act(
           observation, prev_plan, train=True, key=action_key)
 
-    observation, reward, terminated, truncated, info = env.step(action)
+    next_observation, reward, terminated, truncated, info = env.step(action)
     replay_buffer.insert(dict(
-        observations=observation,
-        actions=action,
-        rewards=reward,
-        dones=terminated),
+        observation=observation,
+        action=action,
+        reward=reward,
+        next_observation=next_observation,
+        done=terminated),
         episode_index=ep_count)
+    observation = next_observation
 
     if terminated or truncated:
       observation, _ = env.reset(seed=seed)
@@ -89,10 +101,9 @@ def train(cfg: dict):
       r = info['episode']['r']
       l = info['episode']['l']
       print(f"Episode: r = {r}, l = {l}")
-      print(
-          f"Losses: c = {c_loss/l} r = {r_loss/l} v = {v_loss/l} total = {loss/l}")
-
-      c_loss, r_loss, v_loss, loss = 0, 0, 0, 0
+      # Print the mean of all episode info
+      if len(ep_info) > 0:
+        print(jax.tree_map(lambda x: np.mean(x), ep_info))
       ep_count += 1
 
     if i >= seed_steps:
@@ -105,17 +116,21 @@ def train(cfg: dict):
       rng, *update_keys = jax.random.split(rng, num_updates+1)
       for j in range(num_updates):
         batch = replay_buffer.sample(
-            tdmpc_config['batch_size'], tdmpc_config['horizon']+1)
-        obs = batch['observations']
-        done = batch['dones']
-        action = batch['actions'][1:]
-        reward = batch['rewards'][1:]
+            tdmpc_config['batch_size'], tdmpc_config['horizon'])
         agent, train_info = agent.update(
-            obs, action, reward, done, key=update_keys[j])
-        c_loss += train_info['consistency_loss']
-        r_loss += train_info['reward_loss']
-        v_loss += train_info['value_loss']
-        loss += train_info['total_loss']
+            observations=batch['observation'],
+            actions=batch['action'],
+            rewards=batch['reward'],
+            next_observations=batch['next_observation'],
+            dones=batch['done'],
+            key=update_keys[j])
+        # Append all episode info
+        if len(ep_info) == 0:
+          ep_info = train_info
+
+        if i % 100 == 0:
+          ep_info = jax.tree_map(
+              lambda x, y: np.append(np.array(x), np.array(y)), ep_info, train_info)
 
 
 if __name__ == '__main__':

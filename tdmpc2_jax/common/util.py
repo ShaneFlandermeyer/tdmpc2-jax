@@ -55,3 +55,6 @@ def two_hot_inv(x: jax.Array,
 
   x = jnp.sum(x * bins, axis=-1)
   return symexp(x)
+
+
+def sg(x): return jax.tree_map(jax.lax.stop_gradient, x)
