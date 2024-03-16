@@ -230,42 +230,52 @@ class TDMPC2(struct.PyTreeNode):
       zs = jnp.empty((self.horizon+1, self.batch_size, next_z.shape[-1]))
       z = self.model.encode(observations[0], encoder_params)
       zs = zs.at[0].set(z)
-      consistency_loss = 0
+      consistency_loss = jnp.zeros(self.batch_size)
+      discount = jnp.ones(self.batch_size)
+      horizon = jnp.zeros(self.batch_size)
       for t in range(self.horizon):
         z = self.model.next(z, actions[t], dynamics_params)
-        consistency_loss += mse_loss(z, next_z[t]) * self.rho**t
+        consistency_loss += jnp.mean(
+            (z - next_z[t])**2 * discount[:, None], -1)
         zs = zs.at[t+1].set(z)
 
-      # Value and reward prediction logits
-      _zs = zs[:-1]
-      _, q_logits = self.model.Q(
-          _zs, actions, value_params, value_dropout_key1)
-      _, reward_logits = self.model.reward(_zs, actions, reward_params)
+        horizon += (discount > 0)
+        discount *= self.rho * (1 - dones[t])
 
-      # With the current replay buffer formulation, terminations can only possibly occur as the last step of the sequence
+      # Get logits for loss computations
+      _, q_logits = self.model.Q(
+          zs[:-1], actions, value_params, value_dropout_key1)
+      _, reward_logits = self.model.reward(zs[:-1], actions, reward_params)
       if self.model.predict_continues:
         continue_logits = self.model.continue_model.apply_fn(
-            {'params': continue_params}, _zs).squeeze(-1)
-        continue_loss = optax.sigmoid_binary_cross_entropy(
-            continue_logits[t], 1 - dones[t]).mean()
-      else:
-        continue_loss = 0
+            {'params': continue_params}, zs[1:]).squeeze(-1)
 
-      reward_loss, value_loss = 0, 0
+      reward_loss = jnp.zeros(self.batch_size)
+      value_loss = jnp.zeros(self.batch_size)
+      continue_loss = jnp.zeros(self.batch_size)
+      discount = jnp.ones(self.batch_size)
       for t in range(self.horizon):
         reward_loss += soft_crossentropy(reward_logits[t], rewards[t],
                                          self.model.symlog_min,
                                          self.model.symlog_max,
-                                         self.model.num_bins).mean() * self.rho**t
+                                         self.model.num_bins) * discount
+
+        if self.model.predict_continues:
+          continue_loss += optax.sigmoid_binary_cross_entropy(
+              continue_logits[t], 1 - dones[t]) * discount
+
         for q in range(self.model.num_value_nets):
           value_loss += soft_crossentropy(q_logits[q, t], td_targets[t],
                                           self.model.symlog_min,
                                           self.model.symlog_max,
-                                          self.model.num_bins).mean() * self.rho**t
+                                          self.model.num_bins) * discount
+          
+        discount *= self.rho * (1 - dones[t])
 
-      consistency_loss *= 1 / self.horizon
-      reward_loss *= 1 / self.horizon
-      value_loss *= 1 / (self.horizon * self.model.num_value_nets)
+      consistency_loss = (consistency_loss / horizon).mean()
+      reward_loss = (reward_loss / horizon).mean()
+      value_loss = (value_loss / (horizon + self.model.num_value_nets)).mean()
+      continue_loss = (continue_loss / horizon).mean()
       total_loss = (
           self.consistency_coef * consistency_loss +
           self.reward_coef * reward_loss +
@@ -350,14 +360,15 @@ class TDMPC2(struct.PyTreeNode):
     for t in range(self.horizon):
       reward, _ = self.model.reward(
           z, actions[t], self.model.reward_model.params)
+      z = self.model.next(z, actions[t], self.model.dynamics_model.params)
+      G += discount * reward
+
       if self.model.predict_continues:
         continues = jax.nn.sigmoid(self.model.continue_model.apply_fn(
             {'params': self.model.continue_model.params}, z)).squeeze(-1)
       else:
         continues = 1
 
-      z = self.model.next(z, actions[t], self.model.dynamics_model.params)
-      G += discount * reward
       discount *= self.discount * continues
 
     action_key, dropout_key = jax.random.split(key, 2)

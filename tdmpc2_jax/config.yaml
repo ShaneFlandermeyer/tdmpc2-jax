@@ -1,5 +1,5 @@
 seed: 0
-max_steps: 1_000_000
+max_steps: 250_000
 
 encoder:
   encoder_dim: 256
@@ -37,7 +37,7 @@ tdmpc2:
   rho: 0.5
   consistency_coef: 20
   reward_coef: 0.1
-  continue_coef: 1
+  continue_coef: 0.1
   value_coef: 0.1
   entropy_coef: 1e-4
   tau: 0.01

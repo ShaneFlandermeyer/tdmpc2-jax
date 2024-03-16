@@ -7,11 +7,16 @@ from collections import deque
 
 class EpisodicReplayBuffer():
 
-  def __init__(self, capacity: int, dummy_input: Dict, seed: Optional[int] = None):
+  def __init__(self,
+               capacity: int,
+               dummy_input: Dict,
+               seed: Optional[int] = None,
+               respect_episode_boundaries: bool = True):
     self.capacity = capacity
     self.data = jax.tree_map(lambda x: np.empty(
         (capacity,) + np.asarray(x).shape, np.asarray(x).dtype), dummy_input)
 
+    self.respect_episode_boundaries = respect_episode_boundaries
     self.last_episode_ind = None
     self.episode_starts = deque()
     self.episode_counts = deque()
@@ -48,23 +53,23 @@ class EpisodicReplayBuffer():
     self.size = min(self.size + 1, self.capacity)
 
   def sample(self, batch_size: int, sequence_length: int) -> Dict:
-    episode_starts, counts = np.array(
-        self.episode_starts), np.array(self.episode_counts)
-    valid = counts >= sequence_length
-    episode_starts, counts = episode_starts[valid], counts[valid]
+    if self.respect_episode_boundaries:
+      episode_starts, counts = np.array(
+          self.episode_starts), np.array(self.episode_counts)
+      valid = counts >= sequence_length
+      episode_starts, counts = episode_starts[valid], counts[valid]
 
-    # Sample subsequences uniformly within episodes
-    episode_inds = self.np_random.randint(0, len(counts), size=batch_size)
-    sequence_starts = np.round(self.np_random.rand(batch_size) *
-                               (counts[episode_inds] - sequence_length)
-                               ).astype(int)
-    buffer_starts = episode_starts[episode_inds] + sequence_starts
+      # Sample subsequences uniformly within episodes
+      episode_inds = self.np_random.randint(0, len(counts), size=batch_size)
+      sequence_starts = np.round(self.np_random.rand(batch_size) *
+                                 (counts[episode_inds] - sequence_length)
+                                 ).astype(int)
+      buffer_starts = episode_starts[episode_inds] + sequence_starts
+    else:
+      buffer_starts = self.np_random.randint(0, self.size, size=batch_size)
+
     sequence_inds = buffer_starts[:, None] + np.arange(sequence_length)
-
-    # Debug: Sampling without respecting episode boundaries
-    # buffer_starts = self.np_random.randint(0, self.size, size=batch_size)
-    # sequence_inds = buffer_starts[:, None] + np.arange(sequence_length)
-    # sequence_inds = sequence_inds % self.capacity
+    sequence_inds = sequence_inds % self.capacity
 
     return jax.tree_map(lambda x: np.swapaxes(x[sequence_inds], 0, 1),
                         self.data)

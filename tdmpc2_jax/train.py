@@ -68,7 +68,8 @@ def train(cfg: dict):
           next_observation=env.observation_space.sample(),
           done=True,
       ),
-      seed=seed)
+      seed=seed,
+      respect_episode_boundaries=False)
 
   # Training loop
   ep_info = {}
