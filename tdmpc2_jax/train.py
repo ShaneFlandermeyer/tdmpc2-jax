@@ -127,8 +127,10 @@ def train(cfg: dict):
         # Append all episode info
         if len(ep_info) == 0:
           ep_info = train_info
-        ep_info = jax.tree_map(
-            lambda x, y: np.append(np.array(x), np.array(y)), ep_info, train_info)
+
+        if i % 100 == 0:
+          ep_info = jax.tree_map(
+              lambda x, y: np.append(np.array(x), np.array(y)), ep_info, train_info)
 
 
 if __name__ == '__main__':

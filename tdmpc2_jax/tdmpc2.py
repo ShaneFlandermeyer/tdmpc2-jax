@@ -329,8 +329,9 @@ class TDMPC2(struct.PyTreeNode):
           zs, actions, new_value_model.params, value_dropout_key2)
       Q = jnp.mean(Qs, axis=0)
       # Apply running scale
-      scale = percentile_normalization(Q[0], self.scale)
-      Q /= jnp.clip(scale, 1, None)
+      scale = percentile_normalization(sg(Q[0]), self.scale)
+      scale = jnp.clip(scale, 1, None)
+      Q /= scale
 
       # Compute policy objective (equation 4)
       rho = self.rho ** jnp.arange(len(Q))
