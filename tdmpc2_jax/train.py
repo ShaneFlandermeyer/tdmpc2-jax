@@ -69,7 +69,7 @@ def train(cfg: dict):
           done=True,
       ),
       seed=seed,
-      respect_episode_boundaries=True)
+      respect_episode_boundaries=not model_config['predict_continues'])
 
   # Training loop
   ep_info = {}

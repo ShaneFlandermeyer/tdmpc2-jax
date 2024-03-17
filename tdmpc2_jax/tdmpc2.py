@@ -269,11 +269,11 @@ class TDMPC2(struct.PyTreeNode):
           value_loss += soft_crossentropy(q_logits[q, t], td_targets[t],
                                           self.model.symlog_min,
                                           self.model.symlog_max,
-                                          self.model.num_bins) * discount[t]
+                                          self.model.num_bins) * discount[t] / self.model.num_value_nets
 
       consistency_loss = (consistency_loss / horizon).mean()
       reward_loss = (reward_loss / horizon).mean()
-      value_loss = (value_loss / (horizon + self.model.num_value_nets)).mean()
+      value_loss = (value_loss / horizon).mean()
       continue_loss = (continue_loss / horizon).mean()
       total_loss = (
           self.consistency_coef * consistency_loss +
@@ -288,7 +288,7 @@ class TDMPC2(struct.PyTreeNode):
           'value_loss': value_loss,
           'continue_loss': continue_loss,
           'total_loss': total_loss,
-          'zs': sg(zs)
+          'zs': zs
       }
 
     # Update world model
@@ -329,16 +329,16 @@ class TDMPC2(struct.PyTreeNode):
           zs, actions, new_value_model.params, value_dropout_key2)
       Q = jnp.mean(Qs, axis=0)
       # Apply running scale
-      scale = percentile_normalization(sg(Q[0]), self.scale)
+      scale = percentile_normalization(Q[0], self.scale)
       scale = jnp.clip(scale, 1, None)
-      Q /= scale
+      Q = Q / scale
 
       # Compute policy objective (equation 4)
       rho = self.rho ** jnp.arange(len(Q))
       policy_loss = ((self.entropy_coef * log_probs -
                      Q).mean(axis=1) * rho).mean()
       return policy_loss, {'policy_loss': policy_loss,
-                           'policy_scale': sg(scale)}
+                           'policy_scale': scale}
     policy_grads, policy_info = jax.grad(policy_loss_fn, has_aux=True)(
         self.model.policy_model.params)
     new_policy = self.model.policy_model.apply_gradients(grads=policy_grads)
