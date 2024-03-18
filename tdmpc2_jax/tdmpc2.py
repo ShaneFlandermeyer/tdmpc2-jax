@@ -82,7 +82,7 @@ class TDMPC2(struct.PyTreeNode):
                continue_coef=continue_coef,
                entropy_coef=entropy_coef,
                tau=tau,
-               scale=jnp.array([1])
+               scale=jnp.array([1.0])
                )
 
   def act(self,
@@ -332,17 +332,15 @@ class TDMPC2(struct.PyTreeNode):
       Qs, _ = self.model.Q(
           zs, actions, new_value_model.params, value_dropout_key2)
       Q = jnp.mean(Qs, axis=0)
-      # Apply running scale
+      # Update and apply scale
       scale = percentile_normalization(Q[0], self.scale)
-      scale = jnp.clip(scale, 1, None)
-      Q = Q / scale
+      Q /= jnp.clip(scale, 1, None)
 
       # Compute policy objective (equation 4)
-      rho = self.rho ** jnp.arange(len(Q))
+      rho = self.rho ** jnp.arange(self.horizon+1)
       policy_loss = ((self.entropy_coef * log_probs -
                      Q).mean(axis=1) * rho).mean()
-      return policy_loss, {'policy_loss': policy_loss,
-                           'policy_scale': scale}
+      return policy_loss, {'policy_loss': policy_loss, 'policy_scale': scale}
     policy_grads, policy_info = jax.grad(policy_loss_fn, has_aux=True)(
         self.model.policy_model.params)
     new_policy = self.model.policy_model.apply_gradients(grads=policy_grads)

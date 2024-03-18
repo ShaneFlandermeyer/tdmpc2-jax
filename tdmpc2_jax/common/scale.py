@@ -1,6 +1,6 @@
 import jax.numpy as jnp
 import jax
-import optax
+
 
 def percentile(x: jax.Array, q: jax.Array) -> jax.Array:
   x_dtype, x_shape = x.dtype, x.shape
@@ -27,7 +27,7 @@ def percentile_normalization(x: jax.Array,
   percentiles = percentile(x, percentile_range)
   scale = percentiles[1] - percentiles[0]
 
-  return optax.incremental_update(scale, prev_scale, tau)
+  return tau * scale + (1 - tau) * prev_scale
 
 
 def mean_std_normalization(x: jax.Array,
@@ -37,7 +37,7 @@ def mean_std_normalization(x: jax.Array,
   std = jnp.std(x)
   scale = jnp.array([mean, std])
 
-  return optax.incremental_update(scale, prev_scale, tau)
+  return tau * scale + (1 - tau) * prev_scale
 
 
 if __name__ == '__main__':
