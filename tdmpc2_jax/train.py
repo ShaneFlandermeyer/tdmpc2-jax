@@ -66,10 +66,11 @@ def train(cfg: dict):
           action=env.action_space.sample(),
           reward=1.0,
           next_observation=env.observation_space.sample(),
-          done=True,
+          terminated=True,
+          truncated=True,
       ),
       seed=seed,
-      respect_episode_boundaries=not model_config['predict_continues'])
+      respect_episode_boundaries=False)
 
   # Training loop
   ep_info = {}
@@ -90,12 +91,13 @@ def train(cfg: dict):
         action=action,
         reward=reward,
         next_observation=next_observation,
-        done=terminated),
+        terminated=terminated,
+        truncated=truncated),
         episode_index=ep_count)
     observation = next_observation
 
     if terminated or truncated:
-      observation, _ = env.reset(seed=seed)
+      observation, _ = env.reset()
       prev_plan = None
 
       r = info['episode']['r']
@@ -115,14 +117,14 @@ def train(cfg: dict):
 
       rng, *update_keys = jax.random.split(rng, num_updates+1)
       for j in range(num_updates):
-        batch = replay_buffer.sample(
-            tdmpc_config['batch_size'], tdmpc_config['horizon'])
+        batch = replay_buffer.sample(agent.batch_size, agent.horizon)
         agent, train_info = agent.update(
             observations=batch['observation'],
             actions=batch['action'],
             rewards=batch['reward'],
             next_observations=batch['next_observation'],
-            dones=batch['done'],
+            terminated=batch['terminated'],
+            truncated=batch['truncated'],
             key=update_keys[j])
         # Append all episode info
         if len(ep_info) == 0:

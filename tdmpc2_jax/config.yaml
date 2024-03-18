@@ -1,4 +1,4 @@
-seed: 0
+seed: 42
 max_steps: 250_000
 
 encoder:
@@ -14,7 +14,7 @@ world_model:
   symlog_min: -10
   symlog_max: 10
   simnorm_dim: 8
-  learning_rate: 1e-4
+  learning_rate: 3e-4
   encoder_learning_rate: 1e-4
   predict_continues: False
   dtype: bfloat16
@@ -35,7 +35,7 @@ tdmpc2:
   batch_size: 256
   discount: 0.99
   rho: 0.5
-  consistency_coef: 10
+  consistency_coef: 20
   reward_coef: 0.1
   continue_coef: 0.1
   value_coef: 0.1
