@@ -166,8 +166,8 @@ class WorldModel(struct.PyTreeNode):
     if tabulate:
       print("Encoder")
       print("-------")
-      print(encoder_module.tabulate(jax.random.key(0), jnp.ones(
-            observation_space.shape), compute_flops=True))
+      print(encoder_module.tabulate(jax.random.key(0),
+            observation_space.sample(), compute_flops=True))
 
       print("Dynamics Model")
       print("--------------")
