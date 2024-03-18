@@ -72,7 +72,7 @@ class WorldModel(struct.PyTreeNode):
     encoder = TrainState.create(
         apply_fn=encoder_module.apply,
         params=encoder_module.init(
-            key, jnp.ones(observation_space.shape))['params'],
+            key, observation_space.sample())['params'],
         tx=optax.chain(
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(encoder_learning_rate),
