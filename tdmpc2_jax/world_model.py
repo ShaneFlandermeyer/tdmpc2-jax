@@ -72,7 +72,7 @@ class WorldModel(struct.PyTreeNode):
     encoder = TrainState.create(
         apply_fn=encoder_module.apply,
         params=encoder_module.init(
-            key, jnp.ones(observation_space.shape))['params'],
+            key, observation_space.sample())['params'],
         tx=optax.chain(
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(encoder_learning_rate),
@@ -166,8 +166,8 @@ class WorldModel(struct.PyTreeNode):
     if tabulate:
       print("Encoder")
       print("-------")
-      print(encoder_module.tabulate(jax.random.key(0), jnp.ones(
-            observation_space.shape), compute_flops=True))
+      print(encoder_module.tabulate(jax.random.key(0),
+            observation_space.sample(), compute_flops=True))
 
       print("Dynamics Model")
       print("--------------")
