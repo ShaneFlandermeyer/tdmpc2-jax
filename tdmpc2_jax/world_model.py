@@ -222,7 +222,8 @@ class WorldModel(struct.PyTreeNode):
 
   @jax.jit
   def encode(self, obs: np.ndarray, params: Dict) -> jax.Array:
-    return self.encoder.apply_fn({'params': params}, symlog(obs))
+    return self.encoder.apply_fn({'params': params},
+                                 jax.tree_map(lambda x: symlog(x), obs))
 
   @jax.jit
   def next(self, z: jax.Array, a: jax.Array, params: Dict) -> jax.Array:
