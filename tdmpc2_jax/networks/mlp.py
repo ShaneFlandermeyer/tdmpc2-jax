@@ -12,7 +12,7 @@ class NormedLinear(nn.Module):
   dropout_rate: Optional[float] = None
 
   kernel_init: Callable = nn.initializers.truncated_normal(stddev=0.02)
-  dtype: jnp.dtype = jnp.float32  # Switch this to bfloat16 for speed
+  dtype: jnp.dtype = jnp.bfloat16  # Switch this to bfloat16 for speed
   param_dtype: jnp.dtype = jnp.float32
 
   @nn.compact
