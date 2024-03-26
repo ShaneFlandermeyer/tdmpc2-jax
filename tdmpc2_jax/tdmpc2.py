@@ -96,29 +96,31 @@ class TDMPC2(struct.PyTreeNode):
     z = self.model.encode(obs, self.model.encoder.params)
 
     if self.mpc:
-        
+
       num_envs = z.shape[0] if z.ndim > 1 else 1
       if prev_mean is None:
         prev_mean = jnp.zeros(
             (num_envs, self.horizon, self.model.action_dim))
-        
-      action, plan_mean = self.plan(
+
+      action, plan = self.plan(
           jnp.atleast_2d(z), prev_mean, train, jax.random.split(key, num_envs))
+      plan_mean, plan_std = plan
       action = action.squeeze(0) if z.ndim == 1 else action
-      
+
     else:
       action = self.model.sample_actions(
           z, self.model.policy_model.params, key=key)[0]
       plan_mean = None
 
+    assert not jnp.any(jnp.isnan(action))
     return np.array(action), plan_mean
 
   @jax.jit
-  @partial(jax.vmap, in_axes=(None, 0, 0, 0, 0), out_axes=0)
+  @partial(jax.vmap, in_axes=(None, 0, 0, None, 0), out_axes=0)
   def plan(self,
            z: jax.Array,
            prev_mean: jax.Array,
-           train: jax.Array,
+           train: bool,
            key: PRNGKeyArray,
            ) -> Tuple[jax.Array, jax.Array]:
     """
