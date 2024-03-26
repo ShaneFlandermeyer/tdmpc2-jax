@@ -114,7 +114,7 @@ def train(cfg: dict):
 
     # Get real final observation and store transition
     real_next_observation = next_observation.copy()
-    for itrunc in range(truncated):
+    for itrunc in range(len(truncated)):
       if truncated[itrunc]:
         real_next_observation[itrunc] = info['final_observation'][itrunc]
     replay_buffer.insert(dict(
