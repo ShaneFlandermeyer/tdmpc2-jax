@@ -16,7 +16,7 @@ import jax.numpy as jnp
 os.environ['PYDEVD_DISABLE_FILE_VALIDATION'] = '1'
 
 
-@hydra.main(config_name='vector_config', config_path='.')
+@hydra.main(config_name='config', config_path='.')
 def train(cfg: dict):
 
   env_config = cfg['env']
