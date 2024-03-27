@@ -16,10 +16,10 @@ import jax.numpy as jnp
 os.environ['PYDEVD_DISABLE_FILE_VALIDATION'] = '1'
 
 
-@hydra.main(config_name='config', config_path='.')
+@hydra.main(config_name='vector_config', config_path='.')
 def train(cfg: dict):
-  seed = cfg['seed']
-  max_steps = cfg['max_steps']
+
+  env_config = cfg['env']
   encoder_config = cfg['encoder']
   model_config = cfg['world_model']
   tdmpc_config = cfg['tdmpc2']
@@ -28,41 +28,36 @@ def train(cfg: dict):
   # Environment setup
   ##############################
   def make_env(env_id, seed):
-    def thunk():
-      env = gym.make(env_id)
-      env = RescaleActions(env)
-      env = gym.wrappers.RecordEpisodeStatistics(env)
-      env.action_space.seed(seed)
-      env.observation_space.seed(seed)
-      return env
+    env = gym.make(env_id)
+    env = RescaleActions(env)
+    env = gym.wrappers.RecordEpisodeStatistics(env)
+    env.action_space.seed(seed)
+    env.observation_space.seed(seed)
+    return env
 
-    return thunk
-
-  num_envs = 4
-  steps_per_update = 4
   T = 500
-  seed_steps = max(5*T, 1000) * num_envs
+  seed_steps = max(5*T, 1000) * env_config.num_envs
   env = gym.vector.AsyncVectorEnv(
-      [make_env('Humanoid-v4', seed) for seed in range(seed, seed+num_envs)])
-  np.random.seed(seed)
-  rng = jax.random.PRNGKey(seed)
+      [partial(make_env, env_config.env_name, seed) for seed in range(cfg.seed, cfg.seed+env_config.num_envs)])
+  np.random.seed(cfg.seed)
+  rng = jax.random.PRNGKey(cfg.seed)
 
   ##############################
   # Agent setup
   ##############################
-  dtype = jnp.dtype(model_config['dtype'])
+  dtype = jnp.dtype(model_config.dtype)
   rng, model_key = jax.random.split(rng, 2)
   encoder = nn.Sequential(
       [
-          NormedLinear(encoder_config['encoder_dim'],
+          NormedLinear(encoder_config.encoder_dim,
                        activation=mish, dtype=dtype)
-          for _ in range(encoder_config['num_encoder_layers']-1)
+          for _ in range(encoder_config.num_encoder_layers-1)
       ] +
       [
           NormedLinear(
-              model_config['latent_dim'],
+              model_config.latent_dim,
               activation=partial(
-                  simnorm, simplex_dim=model_config['simnorm_dim']),
+                  simnorm, simplex_dim=model_config.simnorm_dim),
               dtype=dtype)
       ])
 
@@ -82,7 +77,7 @@ def train(cfg: dict):
   dummy_next_obs, dummy_reward, dummy_term, dummy_trunc, _ = \
       env.step(dummy_action)
   replay_buffer = SequentialReplayBuffer(
-      capacity=max_steps//num_envs,
+      capacity=cfg.max_steps//env_config.num_envs,
       num_envs=env.num_envs,
       dummy_input=dict(
           observation=dummy_obs,
@@ -92,7 +87,7 @@ def train(cfg: dict):
           terminated=dummy_term,
           truncated=dummy_trunc,
       ),
-      seed=seed)
+      seed=cfg.seed)
 
   ##############################
   # Training loop
@@ -100,8 +95,9 @@ def train(cfg: dict):
   ep_info = {}
   ep_count = np.zeros(env.num_envs, dtype=int)
   prev_mean = jnp.zeros((env.num_envs, agent.horizon, agent.model.action_dim))
-  observation, _ = env.reset(seed=seed)
-  for i in tqdm.tqdm(range(0, max_steps, num_envs), smoothing=0.1):
+  observation, _ = env.reset(seed=cfg.seed)
+  for i in tqdm.tqdm(range(0, cfg.max_steps, env_config.num_envs),
+                     smoothing=0.1):
 
     if i <= seed_steps:
       action = env.action_space.sample()
@@ -142,7 +138,8 @@ def train(cfg: dict):
         print('Pre-training on seed data...')
         num_updates = seed_steps
       else:
-        num_updates = max(1, num_envs // steps_per_update)
+        num_updates = max(
+            1, int(env_config.num_envs * env_config.utd_ratio))
 
       rng, *update_keys = jax.random.split(rng, num_updates+1)
       for j in range(num_updates):
