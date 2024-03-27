@@ -2,9 +2,10 @@ seed: 0
 max_steps: 250_000
 
 env:
-  env_name: Humanoid-v4
+  env_id: Humanoid-v4
   num_envs: 4
-  utd_ratio: 0.25
+  utd_ratio: 0.5
+  asynchronous: True
 
 encoder:
   encoder_dim: 256

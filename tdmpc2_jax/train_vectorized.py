@@ -35,10 +35,12 @@ def train(cfg: dict):
     env.observation_space.seed(seed)
     return env
 
-  T = 500
-  seed_steps = max(5*T, 1000) * env_config.num_envs
-  env = gym.vector.AsyncVectorEnv(
-      [partial(make_env, env_config.env_name, seed) for seed in range(cfg.seed, cfg.seed+env_config.num_envs)])
+  vector_env_cls = gym.vector.AsyncVectorEnv if env_config.asynchronous else gym.vector.SyncVectorEnv
+  env = vector_env_cls(
+      [
+          partial(make_env, env_config.env_id, seed)
+          for seed in range(cfg.seed, cfg.seed+env_config.num_envs)
+      ])
   np.random.seed(cfg.seed)
   rng = jax.random.PRNGKey(cfg.seed)
 
@@ -47,23 +49,18 @@ def train(cfg: dict):
   ##############################
   dtype = jnp.dtype(model_config.dtype)
   rng, model_key = jax.random.split(rng, 2)
-  encoder = nn.Sequential(
-      [
-          NormedLinear(encoder_config.encoder_dim,
-                       activation=mish, dtype=dtype)
-          for _ in range(encoder_config.num_encoder_layers-1)
-      ] +
-      [
-          NormedLinear(
-              model_config.latent_dim,
-              activation=partial(
-                  simnorm, simplex_dim=model_config.simnorm_dim),
-              dtype=dtype)
-      ])
+  encoder = nn.Sequential([
+      NormedLinear(encoder_config.encoder_dim, activation=mish, dtype=dtype)
+      for _ in range(encoder_config.num_encoder_layers-1)] + [
+      NormedLinear(
+          model_config.latent_dim,
+          activation=partial(simnorm, simplex_dim=model_config.simnorm_dim),
+          dtype=dtype)
+  ])
 
   model = WorldModel.create(
-      observation_space=env.single_observation_space,
-      action_space=env.single_action_space,
+      observation_space=env.get_wrapper_attr('single_observation_space'),
+      action_space=env.get_wrapper_attr('single_action_space'),
       encoder_module=encoder,
       **model_config,
       key=model_key)
@@ -79,15 +76,15 @@ def train(cfg: dict):
   replay_buffer = SequentialReplayBuffer(
       capacity=cfg.max_steps//env_config.num_envs,
       num_envs=env.num_envs,
+      seed=cfg.seed,
       dummy_input=dict(
           observation=dummy_obs,
           action=dummy_action,
           reward=dummy_reward,
           next_observation=dummy_next_obs,
           terminated=dummy_term,
-          truncated=dummy_trunc,
-      ),
-      seed=cfg.seed)
+          truncated=dummy_trunc)
+  )
 
   ##############################
   # Training loop
@@ -96,10 +93,13 @@ def train(cfg: dict):
   ep_count = np.zeros(env.num_envs, dtype=int)
   prev_mean = jnp.zeros((env.num_envs, agent.horizon, agent.model.action_dim))
   observation, _ = env.reset(seed=cfg.seed)
-  for i in tqdm.tqdm(range(0, cfg.max_steps, env_config.num_envs),
-                     smoothing=0.1):
 
-    if i <= seed_steps:
+  T = 500
+  seed_steps = max(5*T, 1000) * env_config.num_envs
+  for global_step in tqdm.tqdm(range(0, cfg.max_steps, env_config.num_envs),
+                               smoothing=0.1):
+
+    if global_step <= seed_steps:
       action = env.action_space.sample()
     else:
       rng, action_key = jax.random.split(rng)
@@ -110,9 +110,9 @@ def train(cfg: dict):
 
     # Get real final observation and store transition
     real_next_observation = next_observation.copy()
-    for itrunc in range(len(truncated)):
-      if truncated[itrunc]:
-        real_next_observation[itrunc] = info['final_observation'][itrunc]
+    for ienv, trunc in enumerate(truncated):
+      if trunc:
+        real_next_observation[ienv] = info['final_observation'][ienv]
     replay_buffer.insert(dict(
         observation=observation,
         action=action,
@@ -133,16 +133,15 @@ def train(cfg: dict):
             f"Episode {ep_count[ienv]}: {final_info['episode']['r']}, {final_info['episode']['l']}")
         ep_count[ienv] += 1
 
-    if i >= seed_steps:
-      if i == seed_steps:
+    if global_step >= seed_steps:
+      if global_step == seed_steps:
         print('Pre-training on seed data...')
         num_updates = seed_steps
       else:
-        num_updates = max(
-            1, int(env_config.num_envs * env_config.utd_ratio))
+        num_updates = max(1, int(env_config.num_envs * env_config.utd_ratio))
 
       rng, *update_keys = jax.random.split(rng, num_updates+1)
-      for j in range(num_updates):
+      for iupdate in range(num_updates):
         batch = replay_buffer.sample(agent.batch_size, agent.horizon)
         agent, train_info = agent.update(
             observations=batch['observation'],
@@ -151,7 +150,7 @@ def train(cfg: dict):
             next_observations=batch['next_observation'],
             terminated=batch['terminated'],
             truncated=batch['truncated'],
-            key=update_keys[j])
+            key=update_keys[iupdate])
         # TODO: Log train info
 
 
