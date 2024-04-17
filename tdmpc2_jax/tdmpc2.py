@@ -1,4 +1,5 @@
 from __future__ import annotations
+from functools import partial
 from flax import struct
 import jax
 from jaxtyping import PRNGKeyArray
@@ -8,7 +9,7 @@ from tdmpc2_jax.world_model import WorldModel
 import jax.numpy as jnp
 from tdmpc2_jax.common.loss import binary_crossentropy, mse_loss, soft_crossentropy
 import numpy as np
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 from tdmpc2_jax.common.scale import percentile_normalization
 from tdmpc2_jax.common.util import sg
 
@@ -61,7 +62,8 @@ class TDMPC2(struct.PyTreeNode):
              value_coef: float,
              continue_coef: float,
              entropy_coef: float,
-             tau: float):
+             tau: float
+             ) -> TDMPC2:
 
     return cls(model=world_model,
                mpc=mpc,
@@ -82,34 +84,44 @@ class TDMPC2(struct.PyTreeNode):
                continue_coef=continue_coef,
                entropy_coef=entropy_coef,
                tau=tau,
-               scale=jnp.array([1.0])
+               scale=jnp.array([1.0]),
                )
 
   def act(self,
           obs: np.ndarray,
-          prev_plan: jax.Array = None,
+          prev_mean: Optional[jax.Array] = None,
           train: bool = True,
           *,
           key: PRNGKeyArray):
     z = self.model.encode(obs, self.model.encoder.params)
-    z = jnp.atleast_2d(z)
 
     if self.mpc:
-      action, plan = self.plan(z, prev_plan=prev_plan, train=train, key=key)
+
+      num_envs = z.shape[0] if z.ndim > 1 else 1
+      if prev_mean is None:
+        prev_mean = jnp.zeros(
+            (num_envs, self.horizon, self.model.action_dim))
+
+      action, plan = self.plan(
+          jnp.atleast_2d(z), prev_mean, train, jax.random.split(key, num_envs))
+      plan_mean, plan_std = plan
+      action = action.squeeze(0) if z.ndim == 1 else action
+
     else:
       action = self.model.sample_actions(
-          z, self.model.policy_model.params, key=key)[0].squeeze()
-      plan = None
+          z, self.model.policy_model.params, key=key)[0]
+      plan_mean = None
 
-    return np.array(action), plan
+    return np.array(action), plan_mean
 
   @jax.jit
+  @partial(jax.vmap, in_axes=(None, 0, 0, None, 0), out_axes=0)
   def plan(self,
            z: jax.Array,
-           prev_plan: Tuple[jax.Array, jax.Array] = None,
-           train: bool = False,
-           *,
-           key: PRNGKeyArray) -> Tuple[jax.Array, jax.Array]:
+           prev_mean: jax.Array,
+           train: bool,
+           key: PRNGKeyArray,
+           ) -> Tuple[jax.Array, jax.Array]:
     """
     Select next action via MPPI planner
 
@@ -130,6 +142,7 @@ class TDMPC2(struct.PyTreeNode):
         - Action output from planning
         - Final mean value (for use in warm start)
     """
+    z = jnp.atleast_2d(z)
     # Sample trajectories from policy prior
     key, *prior_keys = jax.random.split(key, self.horizon + 1)
     policy_actions = jnp.empty(
@@ -146,13 +159,10 @@ class TDMPC2(struct.PyTreeNode):
     # Initialize population state
     z = z.repeat(self.population_size, axis=0)
     mean = jnp.zeros((self.horizon, self.model.action_dim))
+    # Warm start MPPI with the previous solution
+    mean = mean.at[:-1].set(prev_mean[1:])
     std = self.max_plan_std * \
         jnp.ones((self.horizon, self.model.action_dim))
-    # Warm start MPPI with the previous solution
-    if prev_plan is not None:
-      prev_mean, prev_std = prev_plan
-      mean = mean.at[:-1].set(prev_mean[1:])
-    #   std = std.at[:-1].set(prev_std[1:])
 
     actions = jnp.empty(
         (self.horizon, self.population_size, self.model.action_dim))
@@ -178,13 +188,14 @@ class TDMPC2(struct.PyTreeNode):
       # Compute elite actions
       value = self.estimate_value(z, actions, key=value_keys[i])
       value = jnp.nan_to_num(value)  # Handle nans
+      actions = jnp.nan_to_num(actions)
       _, elite_inds = jax.lax.top_k(value, self.num_elites)
       elite_values, elite_actions = value[elite_inds], actions[:, elite_inds]
 
       # Update parameters
       max_value = jnp.max(elite_values)
       score = jnp.exp(self.temperature * (elite_values - max_value))
-      score /= jnp.sum(score) + 1e-8
+      score /= jnp.sum(score) + 1e-9
 
       mean = jnp.sum(score[None, :, None] * elite_actions, axis=1)
       std = jnp.sqrt(
@@ -331,7 +342,7 @@ class TDMPC2(struct.PyTreeNode):
       # Compute Q-values
       Qs, _ = self.model.Q(
           zs, actions, new_value_model.params, value_dropout_key2)
-      Q = jnp.mean(Qs, axis=0)
+      Q = Qs.mean(axis=0)
       # Update and apply scale
       scale = percentile_normalization(Q[0], self.scale)
       Q /= jnp.clip(scale, 1, None)
@@ -383,7 +394,7 @@ class TDMPC2(struct.PyTreeNode):
     # Sample two Q-values from the ensemble
     Qs, _ = self.model.Q(
         z, next_action, self.model.value_model.params, key=dropout_key)
-    Q = jnp.mean(Qs, axis=0)
+    Q = Qs.mean(axis=0)
     return sg(G + discount * Q)
 
   @jax.jit

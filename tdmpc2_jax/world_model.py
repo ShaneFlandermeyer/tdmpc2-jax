@@ -1,6 +1,6 @@
 import copy
 from functools import partial
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Callable
 import flax.linen as nn
 from flax.training.train_state import TrainState
 from flax import struct
@@ -62,6 +62,7 @@ class WorldModel(struct.PyTreeNode):
              encoder_learning_rate: float,
              max_grad_norm: float = 10,
              # Misc
+             encoder_optim: Callable = optax.adam,
              tabulate: bool = False,
              dtype: jnp.dtype = jnp.float32,
              *,
@@ -77,7 +78,7 @@ class WorldModel(struct.PyTreeNode):
             key, observation_space.sample())['params'],
         tx=optax.chain(
             optax.clip_by_global_norm(max_grad_norm),
-            optax.adam(encoder_learning_rate),
+            encoder_optim(encoder_learning_rate),
         ))
 
     # Latent forward dynamics model
