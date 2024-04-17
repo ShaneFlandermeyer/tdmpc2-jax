@@ -112,7 +112,6 @@ class TDMPC2(struct.PyTreeNode):
           z, self.model.policy_model.params, key=key)[0]
       plan_mean = None
 
-    assert not jnp.any(jnp.isnan(action))
     return np.array(action), plan_mean
 
   @jax.jit
@@ -189,6 +188,7 @@ class TDMPC2(struct.PyTreeNode):
       # Compute elite actions
       value = self.estimate_value(z, actions, key=value_keys[i])
       value = jnp.nan_to_num(value)  # Handle nans
+      actions = jnp.nan_to_num(actions)
       _, elite_inds = jax.lax.top_k(value, self.num_elites)
       elite_values, elite_actions = value[elite_inds], actions[:, elite_inds]
 
@@ -342,7 +342,7 @@ class TDMPC2(struct.PyTreeNode):
       # Compute Q-values
       Qs, _ = self.model.Q(
           zs, actions, new_value_model.params, value_dropout_key2)
-      Q = jnp.mean(Qs, axis=0)
+      Q = Qs.mean(axis=0)
       # Update and apply scale
       scale = percentile_normalization(Q[0], self.scale)
       Q /= jnp.clip(scale, 1, None)
@@ -394,7 +394,7 @@ class TDMPC2(struct.PyTreeNode):
     # Sample two Q-values from the ensemble
     Qs, _ = self.model.Q(
         z, next_action, self.model.value_model.params, key=dropout_key)
-    Q = jnp.mean(Qs, axis=0)
+    Q = Qs.mean(axis=0)
     return sg(G + discount * Q)
 
   @jax.jit
