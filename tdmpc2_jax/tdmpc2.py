@@ -226,7 +226,7 @@ class TDMPC2(struct.PyTreeNode):
              key: PRNGKeyArray
              ) -> Tuple[TDMPC2, Dict[str, Any]]:
 
-    target_dropout, value_dropout_key1, value_dropout_key2, policy_key = \
+    target_key, value_dropout_key1, value_dropout_key2, policy_key = \
         jax.random.split(key, 4)
 
     def world_model_loss_fn(encoder_params: Dict,
@@ -240,7 +240,7 @@ class TDMPC2(struct.PyTreeNode):
 
       next_z = sg(self.model.encode(next_observations, encoder_params))
       td_targets = self.td_target(
-          next_z, rewards, terminated, key=target_dropout)
+          next_z, rewards, terminated, key=target_key)
 
       # Latent rollout (compute latent dynamics + consistency loss)
       zs = jnp.empty((self.horizon+1, self.batch_size, next_z.shape[-1]))
@@ -250,17 +250,15 @@ class TDMPC2(struct.PyTreeNode):
       consistency_loss = jnp.zeros(self.batch_size)
       for t in range(self.horizon):
         z = self.model.next(z, actions[t], dynamics_params)
-        consistency_loss += jnp.mean(
-            (z - next_z[t])**2 * discount[t][:, None], -1)
+        consistency_loss += discount[t] * jnp.mean((z - next_z[t])**2, -1)
         zs = zs.at[t+1].set(z)
 
         horizon += (discount[t] > 0)
-        discount = discount.at[t+1].set(
-            discount[t] * self.rho * (1 - done[t]))
+        discount = discount.at[t+1].set(discount[t] * self.rho * (1 - done[t]))
 
       # Get logits for loss computations
       _, q_logits = self.model.Q(
-          zs[:-1], actions, value_params, value_dropout_key1)
+          zs[:-1], actions, value_params, key=value_dropout_key1)
       _, reward_logits = self.model.reward(zs[:-1], actions, reward_params)
       if self.model.predict_continues:
         continue_logits = self.model.continue_model.apply_fn(
@@ -340,7 +338,7 @@ class TDMPC2(struct.PyTreeNode):
 
       # Compute Q-values
       Qs, _ = self.model.Q(
-          zs, actions, new_value_model.params, value_dropout_key2)
+          zs, actions, new_value_model.params, key=value_dropout_key2)
       Q = Qs.mean(axis=0)
       # Update and apply scale
       scale = percentile_normalization(Q[0], self.scale)
@@ -409,5 +407,5 @@ class TDMPC2(struct.PyTreeNode):
                              shape=(2, ), replace=False)
     Qs, _ = self.model.Q(
         next_z, next_action, self.model.target_value_model.params, key=dropout_key)
-    Q = jnp.min(Qs[inds], axis=0)
+    Q = Qs[inds].min(axis=0)
     return sg(reward + (1 - terminal) * self.discount * Q)

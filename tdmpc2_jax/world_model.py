@@ -68,14 +68,15 @@ class WorldModel(struct.PyTreeNode):
              *,
              key: PRNGKeyArray,
              ):
-    dynamics_key, reward_key, value_key = jax.random.split(key, 3)
+    encoder_key, dynamics_key, reward_key, value_key, policy_key, continue_key = jax.random.split(
+        key, 6)
 
     action_dim = np.prod(action_space.shape)
 
     encoder = TrainState.create(
         apply_fn=encoder_module.apply,
         params=encoder_module.init(
-            key, observation_space.sample())['params'],
+            encoder_key, observation_space.sample())['params'],
         tx=optax.chain(
             optax.clip_by_global_norm(max_grad_norm),
             encoder_optim(encoder_learning_rate),
@@ -121,7 +122,7 @@ class WorldModel(struct.PyTreeNode):
     ])
     policy_model = TrainState.create(
         apply_fn=policy_module.apply,
-        params=policy_module.init(key, jnp.zeros(latent_dim))['params'],
+        params=policy_module.init(policy_key, jnp.zeros(latent_dim))['params'],
         tx=optax.chain(
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(learning_rate, eps=1e-5),
@@ -158,7 +159,7 @@ class WorldModel(struct.PyTreeNode):
       continue_model = TrainState.create(
           apply_fn=continue_module.apply,
           params=continue_module.init(
-              key, jnp.zeros(latent_dim))['params'],
+              continue_key, jnp.zeros(latent_dim))['params'],
           tx=optax.chain(
               optax.clip_by_global_norm(max_grad_norm),
               optax.adam(learning_rate),
