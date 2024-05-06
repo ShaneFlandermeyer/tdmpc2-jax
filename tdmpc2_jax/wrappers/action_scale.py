@@ -11,6 +11,9 @@ class RescaleActions(gym.Wrapper):
     self.action_scale = (env.action_space.high - env.action_space.low) / 2
     self.action_bias = (env.action_space.high + env.action_space.low) / 2
 
+    self.action_space = gym.spaces.Box(
+        low=-1.0, high=1.0, shape=env.action_space.shape)
+
   def step(self, action):
     action = action * self.action_scale + self.action_bias
     return self.env.step(action)
