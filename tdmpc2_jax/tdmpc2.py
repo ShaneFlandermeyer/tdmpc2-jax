@@ -194,7 +194,7 @@ class TDMPC2(struct.PyTreeNode):
       # Update parameters
       max_value = jnp.max(elite_values)
       score = jnp.exp(self.temperature * (elite_values - max_value))
-      score /= jnp.sum(score) + 1e-9
+      score /= jnp.sum(score) + 1e-6
 
       mean = jnp.sum(score[None, :, None] * elite_actions, axis=1)
       std = jnp.sqrt(
@@ -384,14 +384,17 @@ class TDMPC2(struct.PyTreeNode):
 
       discount *= self.discount * continues
 
-    action_key, dropout_key = jax.random.split(key, 2)
+    action_key, dropout_key, ensemble_key = jax.random.split(key, 3)
     next_action = self.model.sample_actions(
         z, self.model.policy_model.params, key=action_key)[0]
 
-    # Sample two Q-values from the ensemble
+    # Sample two Q-values from the target ensemble
+    all_inds = jnp.arange(0, self.model.num_value_nets)
+    inds = jax.random.choice(ensemble_key, a=all_inds,
+                             shape=(2, ), replace=False)
     Qs, _ = self.model.Q(
-        z, next_action, self.model.value_model.params, key=dropout_key)
-    Q = Qs.mean(axis=0)
+        z, next_action, self.model.target_value_model.params, key=dropout_key)
+    Q = Qs[inds].mean(axis=0)
     return sg(G + discount * Q)
 
   @jax.jit

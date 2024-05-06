@@ -1,4 +1,4 @@
-seed: 0
+seed: 42
 max_steps: 500_000
 
 env:
@@ -23,7 +23,7 @@ world_model:
   simnorm_dim: 8
   learning_rate: 3e-4
   encoder_learning_rate: 1e-4
-  predict_continues: False
+  predict_continues: True
   dtype: bfloat16
   tabulate: False
 
