@@ -95,7 +95,7 @@ def train(cfg: dict):
   observation, _ = env.reset(seed=cfg.seed)
 
   T = 500
-  seed_steps = max(5*T, 1000) * env_config.num_envs
+  seed_steps = int(max(5*T, 1000) * env_config.num_envs * env_config.utd_ratio)
   for global_step in tqdm.tqdm(range(0, cfg.max_steps, env_config.num_envs),
                                smoothing=0.1):
 
@@ -151,7 +151,6 @@ def train(cfg: dict):
             terminated=batch['terminated'],
             truncated=batch['truncated'],
             key=update_keys[iupdate])
-        # TODO: Log train info
 
 
 if __name__ == '__main__':

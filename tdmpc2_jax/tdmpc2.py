@@ -187,7 +187,6 @@ class TDMPC2(struct.PyTreeNode):
 
       # Compute elite actions
       value = self.estimate_value(z, actions, key=value_keys[i])
-      value = jnp.nan_to_num(value)  # Handle nans
       _, elite_inds = jax.lax.top_k(value, self.num_elites)
       elite_values, elite_actions = value[elite_inds], actions[:, elite_inds]
 

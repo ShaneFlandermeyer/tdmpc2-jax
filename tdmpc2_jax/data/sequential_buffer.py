@@ -64,13 +64,23 @@ class SequentialReplayBuffer():
     Dict
     """
     env_inds = self.np_random.randint(0, self.num_envs, size=(batch_size, 1))
-    buffer_starts = self.np_random.randint(0, self.size, size=(batch_size, 1))
-    sequence_inds = buffer_starts + np.arange(sequence_length)
-    sequence_inds = sequence_inds % self.capacity
+
+    if self.size < self.capacity:
+      # This requires special handling to avoid sampling from the empty part of the buffer. Once the buffer is full, we can sample to our heart's content
+      buffer_starts = self.np_random.randint(
+          0, self.size - sequence_length, size=(batch_size, 1))
+      sequence_inds = buffer_starts + np.arange(sequence_length)
+    else: 
+      buffer_starts = self.np_random.randint(
+          0, self.size, size=(batch_size, 1))
+      sequence_inds = buffer_starts + np.arange(sequence_length)
+      sequence_inds = sequence_inds % self.capacity
 
     # Sample from buffer and convert from (batch, time, *) to (time, batch, *)
-    return jax.tree_map(lambda x: np.swapaxes(x[sequence_inds, env_inds], 0, 1),
-                        self.data)
+    batch = jax.tree_map(lambda x: np.swapaxes(
+        x[sequence_inds, env_inds], 0, 1), self.data)
+
+    return batch
 
 
 if __name__ == '__main__':
