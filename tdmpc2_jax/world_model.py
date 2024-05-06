@@ -1,6 +1,6 @@
 import copy
 from functools import partial
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Callable
 import flax.linen as nn
 from flax.training.train_state import TrainState
 from flax import struct
@@ -37,6 +37,7 @@ class WorldModel(struct.PyTreeNode):
   symlog_min: float
   symlog_max: float
   predict_continues: bool = struct.field(pytree_node=False)
+  symlog_obs: bool = struct.field(pytree_node=False)
 
   @classmethod
   def create(cls,
@@ -55,27 +56,30 @@ class WorldModel(struct.PyTreeNode):
              symlog_max: float,
              simnorm_dim: int,
              predict_continues: bool,
+             symlog_obs: bool,
              # Optimization
              learning_rate: float,
              encoder_learning_rate: float,
              max_grad_norm: float = 10,
              # Misc
+             encoder_optim: Callable = optax.adam,
              tabulate: bool = False,
              dtype: jnp.dtype = jnp.float32,
              *,
              key: PRNGKeyArray,
              ):
-    dynamics_key, reward_key, value_key = jax.random.split(key, 3)
+    encoder_key, dynamics_key, reward_key, value_key, policy_key, continue_key = jax.random.split(
+        key, 6)
 
     action_dim = np.prod(action_space.shape)
 
     encoder = TrainState.create(
         apply_fn=encoder_module.apply,
         params=encoder_module.init(
-            key, observation_space.sample())['params'],
+            encoder_key, observation_space.sample())['params'],
         tx=optax.chain(
             optax.clip_by_global_norm(max_grad_norm),
-            optax.adam(encoder_learning_rate),
+            encoder_optim(encoder_learning_rate),
         ))
 
     # Latent forward dynamics model
@@ -118,7 +122,7 @@ class WorldModel(struct.PyTreeNode):
     ])
     policy_model = TrainState.create(
         apply_fn=policy_module.apply,
-        params=policy_module.init(key, jnp.zeros(latent_dim))['params'],
+        params=policy_module.init(policy_key, jnp.zeros(latent_dim))['params'],
         tx=optax.chain(
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(learning_rate, eps=1e-5),
@@ -155,7 +159,7 @@ class WorldModel(struct.PyTreeNode):
       continue_model = TrainState.create(
           apply_fn=continue_module.apply,
           params=continue_module.init(
-              key, jnp.zeros(latent_dim))['params'],
+              continue_key, jnp.zeros(latent_dim))['params'],
           tx=optax.chain(
               optax.clip_by_global_norm(max_grad_norm),
               optax.adam(learning_rate),
@@ -218,12 +222,14 @@ class WorldModel(struct.PyTreeNode):
         symlog_min=float(symlog_min),
         symlog_max=float(symlog_max),
         predict_continues=predict_continues,
+        symlog_obs=symlog_obs
     )
 
   @jax.jit
   def encode(self, obs: np.ndarray, params: Dict) -> jax.Array:
-    return self.encoder.apply_fn({'params': params},
-                                 jax.tree_map(lambda x: symlog(x), obs))
+    if self.symlog_obs:
+      obs = jax.tree_map(lambda x: symlog(x), obs)
+    return self.encoder.apply_fn({'params': params}, obs)
 
   @jax.jit
   def next(self, z: jax.Array, a: jax.Array, params: Dict) -> jax.Array:
