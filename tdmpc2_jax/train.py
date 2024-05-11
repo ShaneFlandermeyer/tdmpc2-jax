@@ -123,12 +123,14 @@ def train(cfg: dict):
     observation = next_observation
 
     # Handle terminations/truncations
+    done = np.logical_or(terminated, truncated)
+    if np.any(done):
+      prev_mean = prev_mean.at[done].set(0)
+      
     if "final_info" in info:
       for ienv, final_info in enumerate(info["final_info"]):
         if final_info is None:
           continue
-        # Reset the plan warm start for this env
-        prev_mean = prev_mean.at[ienv].set(0)
         print(
             f"Episode {ep_count[ienv]}: {final_info['episode']['r']}, {final_info['episode']['l']}")
         ep_count[ienv] += 1
