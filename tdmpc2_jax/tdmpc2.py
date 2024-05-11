@@ -248,11 +248,12 @@ class TDMPC2(struct.PyTreeNode):
       consistency_loss = jnp.zeros(self.batch_size)
       for t in range(self.horizon):
         z = self.model.next(z, actions[t], dynamics_params)
-        consistency_loss += discount[t] * jnp.mean((z - next_z[t])**2, -1)
         zs = zs.at[t+1].set(z)
+        consistency_loss += discount[t] * jnp.mean((z - next_z[t])**2, -1)
 
-        horizon += (discount[t] > 0)
-        discount = discount.at[t+1].set(discount[t] * self.rho * (1 - done[t]))
+        horizon += (discount[t] > 0).astype(jnp.float32)
+        discount = discount.at[t+1].set(
+            discount[t] * self.rho * (1 - done[t].astype(jnp.float32)))
 
       # Get logits for loss computations
       _, q_logits = self.model.Q(zs[:-1], actions, value_params, key=Q_keys[0])
@@ -270,20 +271,19 @@ class TDMPC2(struct.PyTreeNode):
                                          self.model.symlog_max,
                                          self.model.num_bins) * discount[t]
 
-        if self.model.predict_continues:
-          continue_loss += optax.sigmoid_binary_cross_entropy(
-              continue_logits[t], 1 - terminated[t]) * discount[t]
-
         for q in range(self.model.num_value_nets):
           value_loss += soft_crossentropy(q_logits[q, t], td_targets[t],
                                           self.model.symlog_min,
                                           self.model.symlog_max,
                                           self.model.num_bins) * discount[t] / self.model.num_value_nets
 
+      if self.model.predict_continues:
+        continue_loss = optax.sigmoid_binary_cross_entropy(
+            continue_logits, 1 - terminated).mean()
+
       consistency_loss = (consistency_loss / horizon).mean()
       reward_loss = (reward_loss / horizon).mean()
       value_loss = (value_loss / horizon).mean()
-      continue_loss = (continue_loss / horizon).mean()
       total_loss = (
           self.consistency_coef * consistency_loss +
           self.reward_coef * reward_loss +
@@ -370,7 +370,7 @@ class TDMPC2(struct.PyTreeNode):
       reward, _ = self.model.reward(
           z, actions[t], self.model.reward_model.params)
       z = self.model.next(z, actions[t], self.model.dynamics_model.params)
-      G += discount * reward
+      G += discount * reward.astype(jnp.float32)
 
       if self.model.predict_continues:
         continues = jax.nn.sigmoid(self.model.continue_model.apply_fn(
@@ -378,7 +378,7 @@ class TDMPC2(struct.PyTreeNode):
       else:
         continues = 1
 
-      discount *= self.discount * continues
+      discount *= self.discount * continues.astype(jnp.float32)
 
     action_key, Q_key = jax.random.split(key, 2)
     next_action = self.model.sample_actions(
