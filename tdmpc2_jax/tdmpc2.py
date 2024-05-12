@@ -264,7 +264,6 @@ class TDMPC2(struct.PyTreeNode):
 
       reward_loss = jnp.zeros(self.batch_size)
       value_loss = jnp.zeros(self.batch_size)
-      continue_loss = jnp.zeros(self.batch_size)
       for t in range(self.horizon):
         reward_loss += soft_crossentropy(reward_logits[t], rewards[t],
                                          self.model.symlog_min,
@@ -280,6 +279,8 @@ class TDMPC2(struct.PyTreeNode):
       if self.model.predict_continues:
         continue_loss = optax.sigmoid_binary_cross_entropy(
             continue_logits, 1 - terminated).mean()
+      else:
+        continue_loss = 0
 
       consistency_loss = (consistency_loss / horizon).mean()
       reward_loss = (reward_loss / horizon).mean()
@@ -365,7 +366,7 @@ class TDMPC2(struct.PyTreeNode):
 
   @jax.jit
   def estimate_value(self, z: jax.Array, actions: jax.Array, key: PRNGKeyArray) -> jax.Array:
-    G, discount = 0, 1
+    G, discount = 0.0, 1.0
     for t in range(self.horizon):
       reward, _ = self.model.reward(
           z, actions[t], self.model.reward_model.params)
@@ -376,16 +377,16 @@ class TDMPC2(struct.PyTreeNode):
         continues = jax.nn.sigmoid(self.model.continue_model.apply_fn(
             {'params': self.model.continue_model.params}, z)).squeeze(-1) > 0.5
       else:
-        continues = 1
+        continues = 1.0
 
-      discount *= self.discount * continues.astype(jnp.float32)
+      discount *= self.discount * continues
 
     action_key, Q_key = jax.random.split(key, 2)
     next_action = self.model.sample_actions(
         z, self.model.policy_model.params, key=action_key)[0]
 
     Qs, _ = self.model.Q(
-        z, next_action, self.model.target_value_model.params, key=Q_key)
+        z, next_action, self.model.value_model.params, key=Q_key)
     Q = Qs.mean(axis=0)
     return sg(G + discount * Q)
 

@@ -103,7 +103,8 @@ def train(cfg: dict):
       action = env.action_space.sample()
     else:
       rng, action_key = jax.random.split(rng)
-      action, prev_mean = agent.act(observation, train=True, key=action_key)
+      action, prev_mean = agent.act(
+          observation, prev_mean, train=True, key=action_key)
 
     next_observation, reward, terminated, truncated, info = env.step(action)
 
