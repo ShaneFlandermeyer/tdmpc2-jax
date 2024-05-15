@@ -1,8 +1,8 @@
 seed: 0
-max_steps: 500_000
+max_steps: 1_000_000
 
 env:
-  env_id: Humanoid-v4
+  env_id: HalfCheetah-v4
   num_envs: 4
   utd_ratio: 0.5
   asynchronous: True
@@ -19,11 +19,11 @@ world_model:
   num_bins: 101
   symlog_min: -10
   symlog_max: 10
-  symlog_obs: True
+  symlog_obs: False
   simnorm_dim: 8
   learning_rate: 3e-4
   encoder_learning_rate: 1e-4
-  predict_continues: True
+  predict_continues: False
   dtype: bfloat16
   tabulate: False
 
@@ -44,7 +44,7 @@ tdmpc2:
   rho: 0.5
   consistency_coef: 20
   reward_coef: 0.1
-  continue_coef: 1
+  continue_coef: 1.0
   value_coef: 0.1
   entropy_coef: 1e-4
   tau: 0.01
