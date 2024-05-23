@@ -89,7 +89,7 @@ class TDMPC2(struct.PyTreeNode):
 
   def act(self,
           obs: np.ndarray,
-          prev_mean: Optional[jax.Array] = None,
+          prev_plan: Optional[Tuple[jax.Array]] = None,
           train: bool = True,
           *,
           key: PRNGKeyArray):
@@ -98,27 +98,29 @@ class TDMPC2(struct.PyTreeNode):
     if self.mpc:
 
       num_envs = z.shape[0] if z.ndim > 1 else 1
-      if prev_mean is None:
-        prev_mean = jnp.zeros(
-            (num_envs, self.horizon, self.model.action_dim))
+      if prev_plan is None:
+        prev_plan = (
+            jnp.zeros((num_envs, self.horizon, self.model.action_dim)),
+            jnp.full((num_envs, self.horizon, self.model.action_dim),
+                     self.max_plan_std)
+        )
 
       action, plan = self.plan(
-          jnp.atleast_2d(z), prev_mean, train, jax.random.split(key, num_envs))
-      plan_mean, plan_std = plan
+          jnp.atleast_2d(z), prev_plan, train, jax.random.split(key, num_envs))
       action = action.squeeze(0) if z.ndim == 1 else action
 
     else:
       action = self.model.sample_actions(
           z, self.model.policy_model.params, key=key)[0]
-      plan_mean = None
+      plan = None
 
-    return np.array(action), plan_mean
+    return np.array(action), plan
 
   @jax.jit
   @partial(jax.vmap, in_axes=(None, 0, 0, None, 0), out_axes=0)
   def plan(self,
            z: jax.Array,
-           prev_mean: jax.Array,
+           prev_plan: Tuple[jax.Array, jax.Array],
            train: bool,
            key: PRNGKeyArray,
            ) -> Tuple[jax.Array, jax.Array]:
@@ -159,10 +161,10 @@ class TDMPC2(struct.PyTreeNode):
     # Initialize population state
     z = z.repeat(self.population_size, axis=0)
     mean = jnp.zeros((self.horizon, self.model.action_dim))
+    std = jnp.full((self.horizon, self.model.action_dim), self.max_plan_std)
     # Warm start MPPI with the previous solution
-    mean = mean.at[:-1].set(prev_mean[1:])
-    std = self.max_plan_std * \
-        jnp.ones((self.horizon, self.model.action_dim))
+    mean = mean.at[:-1].set(prev_plan[0][1:])
+    std = std.at[:-1].set(prev_plan[1][1:])
 
     actions = jnp.empty(
         (self.horizon, self.population_size, self.model.action_dim))
@@ -251,6 +253,7 @@ class TDMPC2(struct.PyTreeNode):
         zs = zs.at[t+1].set(z)
         consistency_loss += discount[t] * jnp.mean((z - next_z[t])**2, -1)
 
+        # Note: Horizon may differ across trajectories where done = True
         horizon += (discount[t] > 0).astype(jnp.float32)
         discount = discount.at[t+1].set(
             discount[t] * self.rho * (1 - done[t].astype(jnp.float32)))
@@ -338,7 +341,7 @@ class TDMPC2(struct.PyTreeNode):
       Qs, _ = self.model.Q(zs, actions, new_value_model.params, key=Q_keys[1])
       Q = Qs.mean(axis=0)
       # Update and apply scale
-      scale = percentile_normalization(Q.mean(axis=0), self.scale)
+      scale = percentile_normalization(Q[0], self.scale)
       Q /= jnp.clip(scale, 1, None)
 
       # Compute policy objective (equation 4)
@@ -381,13 +384,15 @@ class TDMPC2(struct.PyTreeNode):
 
       discount *= self.discount * continues
 
-    action_key, Q_key = jax.random.split(key, 2)
+    action_key, Q_key, ensemble_key = jax.random.split(key, 3)
     next_action = self.model.sample_actions(
         z, self.model.policy_model.params, key=action_key)[0]
 
     Qs, _ = self.model.Q(
         z, next_action, self.model.value_model.params, key=Q_key)
-    Q = Qs.mean(axis=0)
+    inds = jax.random.choice(ensemble_key, jnp.arange(
+        0, self.model.num_value_nets), shape=(2, ), replace=False)
+    Q = Qs[inds].mean(axis=0)
     return sg(G + discount * Q)
 
   @jax.jit
@@ -398,8 +403,8 @@ class TDMPC2(struct.PyTreeNode):
         next_z, self.model.policy_model.params, key=action_key)[0]
 
     # Sample two Q-values from the target ensemble
-    all_inds = jnp.arange(0, self.model.num_value_nets)
-    inds = jax.random.choice(ensemble_key, a=all_inds,
+    inds = jax.random.choice(ensemble_key,
+                             jnp.arange(0, self.model.num_value_nets),
                              shape=(2, ), replace=False)
     Qs, _ = self.model.Q(
         next_z, next_action, self.model.target_value_model.params, key=Q_key)

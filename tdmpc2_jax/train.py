@@ -91,7 +91,11 @@ def train(cfg: dict):
   ##############################
   ep_info = {}
   ep_count = np.zeros(env.num_envs, dtype=int)
-  prev_mean = jnp.zeros((env.num_envs, agent.horizon, agent.model.action_dim))
+  prev_plan = (
+      jnp.zeros((env.num_envs, agent.horizon, agent.model.action_dim)),
+      jnp.full((env.num_envs, agent.horizon,
+               agent.model.action_dim), agent.max_plan_std)
+  )
   observation, _ = env.reset(seed=cfg.seed)
 
   T = 500
@@ -103,8 +107,10 @@ def train(cfg: dict):
       action = env.action_space.sample()
     else:
       rng, action_key = jax.random.split(rng)
-      action, prev_mean = agent.act(
-          observation, prev_mean, train=True, key=action_key)
+      prev_plan = (prev_plan[0],
+                   jnp.full_like(prev_plan[1], agent.max_plan_std))
+      action, prev_plan = agent.act(
+          observation, prev_plan=prev_plan, train=True, key=action_key)
 
     next_observation, reward, terminated, truncated, info = env.step(action)
 
@@ -125,8 +131,11 @@ def train(cfg: dict):
     # Handle terminations/truncations
     done = np.logical_or(terminated, truncated)
     if np.any(done):
-      prev_mean = prev_mean.at[done].set(0)
-      
+      prev_plan = (
+          prev_plan[0].at[done].set(0),
+          prev_plan[1].at[done].set(agent.max_plan_std)
+      )
+
     if "final_info" in info:
       for ienv, final_info in enumerate(info["final_info"]):
         if final_info is None:
