@@ -185,11 +185,10 @@ class TDMPC2(struct.PyTreeNode):
       # Sample actions
       actions = actions.at[:, self.policy_prior_samples:].set(
           mean[:, None, :] + std[:, None, :] * noise[i])
-      actions = jnp.clip(actions, -1, 1)
+      actions = actions.clip(-1, 1)
 
       # Compute elite actions
       value = self.estimate_value(z, actions, key=value_keys[i])
-      value = jnp.nan_to_num(value)
       _, elite_inds = jax.lax.top_k(value, self.num_elites)
       elite_values, elite_actions = value[elite_inds], actions[:, elite_inds]
 
@@ -201,7 +200,7 @@ class TDMPC2(struct.PyTreeNode):
       mean = jnp.sum(score[None, :, None] * elite_actions, axis=1)
       std = jnp.sqrt(
           jnp.sum(score[None, :, None] * (elite_actions - mean[:, None, :])**2, axis=1))
-      std = jnp.clip(std, self.min_plan_std, self.max_plan_std)
+      std = std.clip(self.min_plan_std, self.max_plan_std)
 
     # Select action based on the score
     key, *final_action_keys = jax.random.split(key, 3)
@@ -213,7 +212,7 @@ class TDMPC2(struct.PyTreeNode):
     action += jnp.array(train, float) * action_std * jax.random.normal(
         final_action_keys[1], shape=action.shape)
 
-    action = jnp.clip(action, -1, 1)
+    action = action.clip(-1, 1)
     return sg(action), (mean, std)
 
   @jax.jit
@@ -251,7 +250,7 @@ class TDMPC2(struct.PyTreeNode):
       for t in range(self.horizon):
         z = self.model.next(z, actions[t], dynamics_params)
         zs = zs.at[t+1].set(z)
-        consistency_loss += discount[t] * jnp.mean((z - next_z[t])**2, -1)
+        consistency_loss += discount[t] * jnp.mean((z - next_z[t])**2, axis=-1)
 
         # Note: Horizon may differ across trajectories where done = True
         horizon += (discount[t] > 0).astype(jnp.float32)
@@ -277,7 +276,7 @@ class TDMPC2(struct.PyTreeNode):
           value_loss += soft_crossentropy(q_logits[q, t], td_targets[t],
                                           self.model.symlog_min,
                                           self.model.symlog_max,
-                                          self.model.num_bins) * discount[t] / self.model.num_value_nets
+                                          self.model.num_bins) * discount[t]
 
       if self.model.predict_continues:
         continue_loss = optax.sigmoid_binary_cross_entropy(
@@ -287,7 +286,7 @@ class TDMPC2(struct.PyTreeNode):
 
       consistency_loss = (consistency_loss / horizon).mean()
       reward_loss = (reward_loss / horizon).mean()
-      value_loss = (value_loss / horizon).mean()
+      value_loss = (value_loss / horizon).mean() / self.model.num_value_nets
       total_loss = (
           self.consistency_coef * consistency_loss +
           self.reward_coef * reward_loss +
@@ -342,7 +341,7 @@ class TDMPC2(struct.PyTreeNode):
       Q = Qs.mean(axis=0)
       # Update and apply scale
       scale = percentile_normalization(Q[0], self.scale)
-      Q /= jnp.clip(scale, 1, None)
+      Q /= scale.clip(1, None)
 
       # Compute policy objective (equation 4)
       rho = self.rho ** jnp.arange(self.horizon+1)
@@ -390,8 +389,9 @@ class TDMPC2(struct.PyTreeNode):
 
     Qs, _ = self.model.Q(
         z, next_action, self.model.value_model.params, key=Q_key)
-    inds = jax.random.choice(ensemble_key, jnp.arange(
-        0, self.model.num_value_nets), shape=(2, ), replace=False)
+    inds = jax.random.choice(ensemble_key,
+                             jnp.arange(0, self.model.num_value_nets),
+                             shape=(2, ), replace=False)
     Q = Qs[inds].mean(axis=0)
     return sg(G + discount * Q)
 
