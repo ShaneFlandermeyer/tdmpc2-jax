@@ -24,3 +24,16 @@ Install the package from the base directory with
 ```[bash]
 pip install -e .
 ```
+## Contributing
+
+If you enjoy this project and would like to help improve it, feel free to put in an issue or pull request! 
+While the core algorithm is fully implemented, the following features still need to be added:
+
+* Logging (WandB and Tensorboard)
+* Checkpointing (via [Orbax](https://flax.readthedocs.io/en/latest/guides/training_techniques/use_checkpointing.html))
+* Thorough performance comparison with the original implementation
+* Multi-task operation through task embeddings and replay buffer
+* General jax performance improvements
+    - jax.lax.scan instaead of for loops
+    - VMap parallel loss computations
+* Support for DMControl environments
