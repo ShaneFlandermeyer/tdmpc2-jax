@@ -14,7 +14,13 @@ pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-re
 pip install --upgrade tqdm numpy flax optax jaxtyping einops "gymnasium[mujoco]" hydra-core tensorflow orbax-checkpoint dm_control
 ```
 
-Then, edit ```config.yaml``` and run ```train.py``` in the main project directory.
+Then, edit ```config.yaml``` and run ```train.py``` in the main project directory. Some examples:
+```[bash]
+# gymnasium 
+python train.py env.benchmark=gymnasium env.env_id=HalfCheetah-v4 
+# dmcs
+python train.py env.benchmark=dmc env.env_id=cheetah-run   
+```
 
 
 ## Installation
