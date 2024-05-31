@@ -12,7 +12,6 @@ from tdmpc2_jax import WorldModel, TDMPC2
 from tdmpc2_jax.data import SequentialReplayBuffer
 import os
 import hydra
-from tdmpc2_jax.wrappers.action_scale import RescaleActions
 import jax.numpy as jnp
 import orbax.checkpoint as ocp
 
@@ -37,7 +36,7 @@ def train(cfg: dict):
   ##############################
   def make_env(env_id, seed):
     env = gym.make(env_id)
-    env = RescaleActions(env)
+    env = gym.wrappers.RescaleAction(env, min_action=-1, max_action=1)
     env = gym.wrappers.RecordEpisodeStatistics(env)
     env.action_space.seed(seed)
     env.observation_space.seed(seed)
