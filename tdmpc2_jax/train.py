@@ -10,6 +10,7 @@ from tdmpc2_jax.common.activations import mish, simnorm
 from functools import partial
 from tdmpc2_jax import WorldModel, TDMPC2
 from tdmpc2_jax.data import SequentialReplayBuffer
+from tdmpc2_jax.envs.dmcontrol import make_dmc_env
 import os
 import hydra
 import jax.numpy as jnp
@@ -34,18 +35,27 @@ def train(cfg: dict):
   ##############################
   # Environment setup
   ##############################
-  def make_env(env_id, seed):
-    env = gym.make(env_id)
-    env = gym.wrappers.RescaleAction(env, min_action=-1, max_action=1)
-    env = gym.wrappers.RecordEpisodeStatistics(env)
-    env.action_space.seed(seed)
-    env.observation_space.seed(seed)
-    return env
+  def make_env(env_config, seed):
+    def make_gym_env(env_id, seed):
+      env = gym.make(env_id)
+      env = gym.wrappers.RescaleAction(env, min_action=-1, max_action=1)
+      env = gym.wrappers.RecordEpisodeStatistics(env)
+      env.action_space.seed(seed)
+      env.observation_space.seed(seed)
+      return env
+
+    if env_config.benchmark == "gymnasium":
+      return make_gym_env(env_config.env_id, seed)
+    elif env_config.benchmark == "dmc":
+      _env = make_dmc_env(env_config.env_id, seed, env_config.dmc.obs_type)
+      env = gym.wrappers.RecordEpisodeStatistics(_env)
+      return env
+    raise ValueError("Environment not supported:", env_config)
 
   vector_env_cls = gym.vector.AsyncVectorEnv if env_config.asynchronous else gym.vector.SyncVectorEnv
   env = vector_env_cls(
       [
-          partial(make_env, env_config.env_id, seed)
+          partial(make_env, env_config, seed)
           for seed in range(cfg.seed, cfg.seed+env_config.num_envs)
       ])
   np.random.seed(cfg.seed)
@@ -129,8 +139,8 @@ def train(cfg: dict):
 
     T = 500
     seed_steps = int(max(5*T, 1000) * env_config.num_envs * env_config.utd_ratio)
-    for global_step in tqdm.tqdm(range(global_step, cfg.max_steps, env_config.num_envs)):
-
+    pbar = tqdm.tqdm(initial=global_step,total=cfg.max_steps)
+    for global_step in range(global_step, cfg.max_steps, env_config.num_envs):
       if global_step <= seed_steps:
         action = env.action_space.sample()
       else:
@@ -168,7 +178,7 @@ def train(cfg: dict):
           if final_info is None:
             continue
           print(
-              f"Episode {ep_count[ienv]}: {final_info['episode']['r']}, {final_info['episode']['l']}")
+              f"Episode {ep_count[ienv]}: {final_info['episode']['r'][0]}, {final_info['episode']['l'][0]}")
           writer.scalar(f'episode/return', final_info['episode']['r'], global_step + ienv)
           writer.scalar(f'episode/length', final_info['episode']['l'], global_step + ienv)
           ep_count[ienv] += 1
@@ -213,7 +223,9 @@ def train(cfg: dict):
                 global_step=ocp.args.JsonSave(global_step),
             ),
         )
-
+      
+      pbar.update(env_config.num_envs)
+    pbar.close()
 
 if __name__ == '__main__':
   train()

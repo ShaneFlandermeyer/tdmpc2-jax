@@ -4,7 +4,7 @@ Source: https://github.com/openai/gym/blob/3498617bf031538a808b75b932f4ed2c11896
 """
 from typing import Optional
 
-import gym
+import gymnasium as gym
 
 
 class TimeLimit(gym.Wrapper):

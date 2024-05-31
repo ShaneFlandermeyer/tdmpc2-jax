@@ -1,4 +1,5 @@
-from collections import deque, defaultdict
+from collections import defaultdict
+from envs.wrappers.pixels import PixelWrapper
 from typing import Any, NamedTuple
 import dm_env
 import numpy as np
@@ -164,37 +165,44 @@ class TimeStepToGymWrapper:
 	def _obs_to_array(self, obs):
 		return np.concatenate([v.flatten() for v in obs.values()])
 
-	def reset(self):
+	def reset(self, seed=None, options=None):
 		self.t = 0
-		return self._obs_to_array(self.env.reset().observation)
+		return self._obs_to_array(self.env.reset().observation), {}
 	
 	def step(self, action):
 		self.t += 1
 		time_step = self.env.step(action)
-		return self._obs_to_array(time_step.observation), time_step.reward, time_step.last() or self.t == self.max_episode_steps, defaultdict(float)
+		terminated =  time_step.last()
+		truncated = self.t == self.max_episode_steps
+		return self._obs_to_array(time_step.observation), time_step.reward, terminated, truncated, defaultdict(float)
 
 	def render(self, mode='rgb_array', width=384, height=384, camera_id=0):
 		camera_id = dict(quadruped=2).get(self.domain, camera_id)
 		return self.env.physics.render(height, width, camera_id)
 
+	def close(self):
+		self.env.close()
 
-def make_env(cfg):
+
+def make_dmc_env(task, seed, obs_type):
 	"""
-	Make DMControl environment.
-	Adapted from https://github.com/facebookresearch/drqv2
+	Make a DMC env exactly like TDMPC2 (https://github.com/nicklashansen/tdmpc2/blob/main/tdmpc2/envs/dmcontrol.py).
+	Returns a gymnasium version of the DMC task with action repeat, rescaled actions, timestep observation.
 	"""
-	domain, task = cfg.task.replace('-', '_').split('_', 1)
+	domain, task = task.replace('-', '_').split('_', 1)
 	domain = dict(cup='ball_in_cup', pointmass='point_mass').get(domain, domain)
 	if (domain, task) not in suite.ALL_TASKS:
 		raise ValueError('Unknown task:', task)
-	assert cfg.obs in {'state', 'rgb'}, 'This task only supports state and rgb observations.'
+	assert obs_type in {'state', 'rgb'}, 'This task only supports state and rgb observations.'
 	env = suite.load(domain,
 					 task,
-					 task_kwargs={'random': cfg.seed},
+					 task_kwargs={'random': seed},
 					 visualize_reward=False)
 	env = ActionDTypeWrapper(env, np.float32)
 	env = ActionRepeatWrapper(env, 2)
 	env = action_scale.Wrapper(env, minimum=-1., maximum=1.)
 	env = ExtendedTimeStepWrapper(env)
 	env = TimeStepToGymWrapper(env, domain, task)
+	if obs_type == 'rgb':
+		env = PixelWrapper(env)
 	return env
