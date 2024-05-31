@@ -120,7 +120,7 @@ def train(cfg: dict):
     ##############################
     ep_info = {}
     ep_count = np.zeros(env.num_envs, dtype=int)
-    prev_logged_step = 0
+    prev_logged_step = global_step
     prev_plan = (
         jnp.zeros((env.num_envs, agent.horizon, agent.model.action_dim)),
         jnp.full((env.num_envs, agent.horizon,
