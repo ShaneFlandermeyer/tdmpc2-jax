@@ -60,7 +60,7 @@ class WorldModel(struct.PyTreeNode):
              # Optimization
              learning_rate: float,
              encoder_learning_rate: float,
-             max_grad_norm: float = 10,
+             max_grad_norm: float = 20,
              # Misc
              encoder_optim: Callable = optax.adam,
              tabulate: bool = False,
