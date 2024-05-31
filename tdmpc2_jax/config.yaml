@@ -1,5 +1,6 @@
 seed: 0
 max_steps: 1_000_000
+save_interval_steps: 100000
 
 env:
   env_id: HalfCheetah-v4

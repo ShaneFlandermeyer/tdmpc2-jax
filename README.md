@@ -11,7 +11,7 @@ To install the dependencies for this project (tested on Ubuntu 22.04), run
 ```[bash]
 pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 
-pip install --upgrade tqdm numpy flax optax jaxtyping einops gymnasium[mujoco]
+pip install --upgrade tqdm numpy flax optax jaxtyping einops "gymnasium[mujoco]" hydra-core
 ```
 
 Then, edit ```config.yaml``` and run ```train.py``` in the main project directory.
