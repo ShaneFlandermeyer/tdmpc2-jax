@@ -1,5 +1,13 @@
+hydra:
+  job:
+    name: ${env.env_id}_s${seed}
+  run:
+    dir: outputs/${hydra.job.name}/${now:%Y-%m-%d_%H-%M-%S}
+
 seed: 0
 max_steps: 1_000_000
+save_interval_steps: 100000
+log_interval_steps: 10000
 
 env:
   env_id: HalfCheetah-v4
@@ -33,7 +41,7 @@ tdmpc2:
   horizon: 3
   mppi_iterations: 6
   population_size: 512
-  policy_prior_samples: 32
+  policy_prior_samples: 24
   num_elites: 64
   min_plan_std: 0.05
   max_plan_std: 2
