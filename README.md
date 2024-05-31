@@ -11,7 +11,7 @@ To install the dependencies for this project (tested on Ubuntu 22.04), run
 ```[bash]
 pip install --upgrade "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 
-pip install --upgrade tqdm numpy flax optax jaxtyping einops "gymnasium[mujoco]" hydra-core
+pip install --upgrade tqdm numpy flax optax jaxtyping einops "gymnasium[mujoco]" hydra-core tensorflow orbax-checkpoint
 ```
 
 Then, edit ```config.yaml``` and run ```train.py``` in the main project directory.
@@ -24,3 +24,15 @@ Install the package from the base directory with
 ```[bash]
 pip install -e .
 ```
+
+## Contributing
+
+If you enjoy this project and would like to help improve it, feel free to put in an issue or pull request! 
+While the core algorithm is fully implemented, the following features still need to be added:
+
+* Thorough performance comparison with the original implementation
+* Multi-task operation through task embeddings and replay buffer
+* General jax performance improvements
+    * jax.lax.scan instaead of for loops
+    * VMap parallel loss computations
+* Support for DMControl environments
