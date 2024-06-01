@@ -243,7 +243,7 @@ class TDMPC2(struct.PyTreeNode):
 
       # Latent rollout (compute latent dynamics + consistency loss)
       zs = jnp.empty((self.horizon+1, self.batch_size, next_z.shape[-1]))
-      z = self.model.encode(jax.tree_map(
+      z = self.model.encode(jax.tree.map(
           lambda x: x[0], observations), encoder_params)
       zs = zs.at[0].set(z)
       consistency_loss = jnp.zeros(self.batch_size)
