@@ -17,9 +17,9 @@ pip install --upgrade tqdm numpy flax optax jaxtyping einops "gymnasium[mujoco]"
 Then, edit ```config.yaml``` and run ```train.py``` in the main project directory. Some examples:
 ```[bash]
 # gymnasium 
-python train.py env.benchmark=gymnasium env.env_id=HalfCheetah-v4 
+python train.py env.backend=gymnasium env.env_id=HalfCheetah-v4 
 # dmcs
-python train.py env.benchmark=dmc env.env_id=cheetah-run   
+python train.py env.backend=dmc env.env_id=cheetah-run   
 ```
 
 

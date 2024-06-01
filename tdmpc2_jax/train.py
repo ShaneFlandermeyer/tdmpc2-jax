@@ -44,9 +44,9 @@ def train(cfg: dict):
       env.observation_space.seed(seed)
       return env
 
-    if env_config.benchmark == "gymnasium":
+    if env_config.backend == "gymnasium":
       return make_gym_env(env_config.env_id, seed)
-    elif env_config.benchmark == "dmc":
+    elif env_config.backend == "dmc":
       _env = make_dmc_env(env_config.env_id, seed, env_config.dmc.obs_type)
       env = gym.wrappers.RecordEpisodeStatistics(_env)
       return env
