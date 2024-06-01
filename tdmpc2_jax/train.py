@@ -108,13 +108,22 @@ def train(cfg: dict):
   options = ocp.CheckpointManagerOptions(max_to_keep=1, save_interval_steps=cfg['save_interval_steps'])
   checkpoint_path = os.path.join(output_dir, 'checkpoint')
   with ocp.CheckpointManager(
-      checkpoint_path, options=options, item_names=('agent', 'global_step')
+      checkpoint_path, options=options, item_names=('agent', 'global_step', 'buffer_state')
   ) as mngr:
     if mngr.latest_step() is not None:
       print('Checkpoint folder found, restoring from', mngr.latest_step())
-      mngr.wait_until_finished()
-      restored = mngr.restore(mngr.latest_step())
+      abstract_buffer_state =  jax.tree.map(
+        ocp.utils.to_shape_dtype_struct, replay_buffer.get_state()
+      )
+      restored = mngr.restore(mngr.latest_step(), 
+        args=ocp.args.Composite(
+          agent=ocp.args.StandardRestore(agent),
+          global_step=ocp.args.JsonRestore(),
+          buffer_state=ocp.args.StandardRestore(abstract_buffer_state),
+        )
+      )
       agent, global_step = restored.agent, restored.global_step
+      replay_buffer.restore(restored.buffer_state)
     else:
       print('No checkpoint folder found, starting from scratch')
       mngr.save(
@@ -122,6 +131,7 @@ def train(cfg: dict):
         args=ocp.args.Composite(
             agent=ocp.args.StandardSave(agent),
             global_step=ocp.args.JsonSave(global_step),
+            buffer_state=ocp.args.StandardSave(replay_buffer.get_state()),
         ),
       )
       mngr.wait_until_finished()
@@ -180,7 +190,7 @@ def train(cfg: dict):
           if final_info is None:
             continue
           print(
-              f"Episode {ep_count[ienv]}: {final_info['episode']['r'][0]}, {final_info['episode']['l'][0]}")
+              f"Episode {ep_count[ienv]}: {final_info['episode']['r'][0]:.2f}, {final_info['episode']['l'][0]}")
           writer.scalar(f'episode/return', final_info['episode']['r'], global_step + ienv)
           writer.scalar(f'episode/length', final_info['episode']['l'], global_step + ienv)
           ep_count[ienv] += 1
@@ -223,6 +233,7 @@ def train(cfg: dict):
             args=ocp.args.Composite(
                 agent=ocp.args.StandardSave(agent),
                 global_step=ocp.args.JsonSave(global_step),
+                buffer_state=ocp.args.StandardSave(replay_buffer.get_state()),
             ),
         )
       
