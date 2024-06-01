@@ -373,7 +373,7 @@ class TDMPC2(struct.PyTreeNode):
       reward, _ = self.model.reward(
           z, actions[t], self.model.reward_model.params)
       z = self.model.next(z, actions[t], self.model.dynamics_model.params)
-      G += discount * reward.astype(jnp.float32)
+      G += discount * reward
 
       if self.model.predict_continues:
         continues = jax.nn.sigmoid(self.model.continue_model.apply_fn(

@@ -35,7 +35,7 @@ world_model:
   learning_rate: 3e-4
   encoder_learning_rate: 1e-4
   predict_continues: False
-  dtype: bfloat16
+  dtype: float32
   tabulate: False
 
 tdmpc2:
