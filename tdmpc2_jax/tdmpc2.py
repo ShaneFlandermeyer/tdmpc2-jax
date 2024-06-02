@@ -195,12 +195,14 @@ class TDMPC2(struct.PyTreeNode):
       # Update parameters
       max_value = jnp.max(elite_values)
       score = jnp.exp(self.temperature * (elite_values - max_value))
-      score /= jnp.sum(score) + 1e-6
+      score /= score.sum(0)
 
-      mean = jnp.sum(score[None, :, None] * elite_actions, axis=1)
+      mean = jnp.sum(score[None, :, None] * elite_actions, axis=1) / \
+          (score.sum(0) + 1e-9)
       std = jnp.sqrt(
-          jnp.sum(score[None, :, None] * (elite_actions - mean[:, None, :])**2, axis=1))
-      std = std.clip(self.min_plan_std, self.max_plan_std)
+          jnp.sum(score[None, :, None] * (elite_actions -
+                  mean[:, None, :])**2, axis=1) / (score.sum(0) + 1e-9)
+      ).clip(self.min_plan_std, self.max_plan_std)
 
     # Select action based on the score
     key, *final_action_keys = jax.random.split(key, 3)
@@ -213,7 +215,7 @@ class TDMPC2(struct.PyTreeNode):
         final_action_keys[1], shape=action.shape)
 
     action = action.clip(-1, 1)
-    return sg(action), (mean, std)
+    return action, (mean, std)
 
   @jax.jit
   def update(self,
@@ -253,9 +255,10 @@ class TDMPC2(struct.PyTreeNode):
         consistency_loss += discount[t] * jnp.mean((z - next_z[t])**2, axis=-1)
 
         # Note: Horizon may differ across trajectories where done = True
-        horizon += (discount[t] > 0).astype(jnp.float32)
+        horizon += discount[t] > 0
         discount = discount.at[t+1].set(
-            discount[t] * self.rho * (1 - done[t].astype(jnp.float32)))
+            discount[t] * self.rho * (1.0 - done[t])
+        )
 
       # Get logits for loss computations
       _, q_logits = self.model.Q(zs[:-1], actions, value_params, key=Q_keys[0])
@@ -333,15 +336,19 @@ class TDMPC2(struct.PyTreeNode):
 
     # Update policy
     def policy_loss_fn(params: Dict):
+      action_key, ensemble_key = jax.random.split(policy_key)
       actions, _, _, log_probs = self.model.sample_actions(
-          zs, params, key=policy_key)
+          zs, params, key=action_key)
 
       # Compute Q-values
+      inds = jax.random.choice(ensemble_key,
+                               jnp.arange(0, self.model.num_value_nets),
+                               shape=(2, ), replace=False)
       Qs, _ = self.model.Q(zs, actions, new_value_model.params, key=Q_keys[1])
-      Q = Qs.mean(axis=0)
+      Q = Qs[inds].mean(axis=0)
       # Update and apply scale
-      scale = percentile_normalization(Q[0], self.scale)
-      Q /= scale.clip(1, None)
+      scale = percentile_normalization(Q[0], self.scale).clip(1, None)
+      Q = Q / sg(scale)
 
       # Compute policy objective (equation 4)
       rho = self.rho ** jnp.arange(self.horizon+1)

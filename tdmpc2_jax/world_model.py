@@ -269,7 +269,7 @@ class WorldModel(struct.PyTreeNode):
     # Squash tanh
     mean = jnp.tanh(mu)
     action = jnp.tanh(x_t)
-    log_probs -= jnp.log((1 - action**2) + 1e-6).sum(-1)
+    log_probs -= jnp.log(nn.relu(1 - action**2) + 1e-6).sum(-1)
 
     return action, mean, log_std, log_probs
 

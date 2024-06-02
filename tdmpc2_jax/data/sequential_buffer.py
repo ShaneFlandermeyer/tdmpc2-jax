@@ -80,7 +80,7 @@ class SequentialReplayBuffer():
     if self.size < self.capacity:
       # This requires special handling to avoid sampling from the empty part of the buffer. Once the buffer is full, we can sample to our heart's content
       buffer_starts = self.np_random.randint(
-          0, self.size - sequence_length - 1, size=(batch_size, 1))
+          0, self.size - sequence_length, size=(batch_size, 1))
       sequence_inds = buffer_starts + np.arange(sequence_length)
     else:
       buffer_starts = self.np_random.randint(
