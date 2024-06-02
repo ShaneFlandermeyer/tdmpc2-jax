@@ -5,7 +5,7 @@ import flax.linen as nn
 from flax.training.train_state import TrainState
 from flax import struct
 import numpy as np
-from numpy.typing import ArrayLike
+from jax.typing import ArrayLike
 from tdmpc2_jax.networks import NormedLinear
 from tdmpc2_jax.common.activations import mish, simnorm
 from jaxtyping import PRNGKeyArray
@@ -26,7 +26,6 @@ class WorldModel(struct.PyTreeNode):
   target_value_model: TrainState
   continue_model: TrainState
   # Spaces
-  action_space_shape: ArrayLike = struct.field(pytree_node=False)
   action_dim: int = struct.field(pytree_node=False)
   # Architecture
   mlp_dim: int = struct.field(pytree_node=False)
@@ -41,8 +40,8 @@ class WorldModel(struct.PyTreeNode):
   @classmethod
   def create(cls,
              # Spaces
-             observation_space_sample: jax.Array,
-             action_space_shape: ArrayLike,
+             dummy_observation: ArrayLike,
+             action_dim: int,
              # Models
              encoder_module: nn.Module,
              # Architecture
@@ -70,12 +69,9 @@ class WorldModel(struct.PyTreeNode):
     encoder_key, dynamics_key, reward_key, value_key, policy_key, continue_key = jax.random.split(
         key, 6)
 
-    action_dim = np.prod(action_space_shape)
-
     encoder = TrainState.create(
         apply_fn=encoder_module.apply,
-        params=encoder_module.init(
-            encoder_key, observation_space_sample)['params'],
+        params=encoder_module.init(encoder_key, dummy_observation)['params'],
         tx=optax.chain(
             optax.clip_by_global_norm(max_grad_norm),
             encoder_optim(encoder_learning_rate),
@@ -170,7 +166,7 @@ class WorldModel(struct.PyTreeNode):
       print("Encoder")
       print("-------")
       print(encoder_module.tabulate(jax.random.key(0),
-            observation_space_sample, compute_flops=True))
+            dummy_observation, compute_flops=True))
 
       print("Dynamics Model")
       print("--------------")
@@ -202,7 +198,6 @@ class WorldModel(struct.PyTreeNode):
 
     return cls(
         # Spaces
-        action_space_shape=action_space_shape,
         action_dim=action_dim,
         # Models
         encoder=encoder,

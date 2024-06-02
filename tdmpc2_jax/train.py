@@ -86,8 +86,8 @@ def train(cfg: dict):
   )
 
   model = WorldModel.create(
-      observation_space_sample=env.get_wrapper_attr('single_observation_space').sample(),
-      action_space_shape=env.get_wrapper_attr('single_action_space').shape,
+      dummy_observation=env.get_wrapper_attr('single_observation_space').sample(),
+      action_dim=env.get_wrapper_attr('single_action_space').shape[0],
       encoder_module=encoder,
       **model_config,
       key=model_key)
