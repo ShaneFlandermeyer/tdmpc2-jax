@@ -221,7 +221,7 @@ def train(cfg: dict):
 
           if log_this_step:
             for k, v in train_info.items():  
-              all_train_info[k].append(v)
+              all_train_info[k].append(np.array(v))
 
         if log_this_step:
           for k, v in all_train_info.items(): 
