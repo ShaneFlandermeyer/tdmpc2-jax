@@ -229,13 +229,14 @@ class TDMPC2(struct.PyTreeNode):
              key: PRNGKeyArray
              ) -> Tuple[TDMPC2, Dict[str, Any]]:
 
-    target_key, *Q_keys, policy_key = jax.random.split(key, 4)
+    world_model_key, policy_key = jax.random.split(key, 2)
 
     def world_model_loss_fn(encoder_params: Dict,
                             dynamics_params: Dict,
                             value_params: Dict,
                             reward_params: Dict,
                             continue_params: Dict):
+      target_key, Q_key = jax.random.split(world_model_key, 2)
       done = jnp.logical_or(terminated, truncated)
       valid = jnp.ones((self.horizon+1, self.batch_size))
 
@@ -258,7 +259,7 @@ class TDMPC2(struct.PyTreeNode):
         valid = valid.at[t+1].set(jnp.logical_and(valid[t], ~done[t]))
 
       # Get logits for loss computations
-      _, q_logits = self.model.Q(zs[:-1], actions, value_params, key=Q_keys[0])
+      _, q_logits = self.model.Q(zs[:-1], actions, value_params, key=Q_key)
       _, reward_logits = self.model.reward(zs[:-1], actions, reward_params)
       if self.model.predict_continues:
         continue_logits = self.model.continue_model.apply_fn(
@@ -335,16 +336,13 @@ class TDMPC2(struct.PyTreeNode):
 
     # Update policy
     def policy_loss_fn(params: Dict):
-      action_key, ensemble_key = jax.random.split(policy_key)
+      action_key, Q_key = jax.random.split(policy_key, 2)
       actions, _, _, log_probs = self.model.sample_actions(
           zs, params, key=action_key)
 
       # Compute Q-values
-      inds = jax.random.choice(ensemble_key,
-                               jnp.arange(0, self.model.num_value_nets),
-                               shape=(2, ), replace=False)
-      Qs, _ = self.model.Q(zs, actions, new_value_model.params, key=Q_keys[1])
-      Q = Qs[inds].mean(axis=0)
+      Qs, _ = self.model.Q(zs, actions, new_value_model.params, key=Q_key)
+      Q = Qs.mean(axis=0)
       # Update and apply scale
       scale = percentile_normalization(Q[0], self.scale).clip(1, None)
       Q = Q / sg(scale)
@@ -389,16 +387,13 @@ class TDMPC2(struct.PyTreeNode):
 
       discount *= self.discount * continues
 
-    action_key, Q_key, ensemble_key = jax.random.split(key, 3)
+    action_key, Q_key = jax.random.split(key, 2)
     next_action = self.model.sample_actions(
         z, self.model.policy_model.params, key=action_key)[0]
 
     Qs, _ = self.model.Q(
         z, next_action, self.model.value_model.params, key=Q_key)
-    inds = jax.random.choice(ensemble_key,
-                             jnp.arange(0, self.model.num_value_nets),
-                             shape=(2, ), replace=False)
-    Q = Qs[inds].mean(axis=0)
+    Q = Qs.mean(axis=0)
     return sg(G + discount * Q)
 
   @jax.jit
