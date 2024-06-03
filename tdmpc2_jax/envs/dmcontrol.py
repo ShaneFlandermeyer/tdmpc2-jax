@@ -172,7 +172,7 @@ class TimeStepToGymWrapper:
 	def step(self, action):
 		self.t += 1
 		time_step = self.env.step(action)
-		terminated =  time_step.last()
+		terminated =  False
 		truncated = self.t == self.max_episode_steps
 		return self._obs_to_array(time_step.observation), time_step.reward, terminated, truncated, defaultdict(float)
 
