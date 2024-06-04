@@ -16,7 +16,11 @@ import hydra
 import jax.numpy as jnp
 import orbax.checkpoint as ocp
 
-
+# Tensorboard: Prevent tf from allocating full GPU memory  
+import tensorflow as tf
+gpus = tf.config.experimental.list_physical_devices('GPU')
+for gpu in gpus:
+  tf.config.experimental.set_memory_growth(gpu, True)
 
 @hydra.main(config_name='config', config_path='.', version_base=None)
 def train(cfg: dict):
