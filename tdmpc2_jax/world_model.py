@@ -78,6 +78,7 @@ class WorldModel(struct.PyTreeNode):
         params=encoder_module.init(
             encoder_key, observation_space.sample())['params'],
         tx=optax.chain(
+            optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
             encoder_optim(encoder_learning_rate),
         ))
@@ -94,6 +95,7 @@ class WorldModel(struct.PyTreeNode):
         params=dynamics_module.init(
             dynamics_key, jnp.zeros(latent_dim + action_dim))['params'],
         tx=optax.chain(
+            optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(learning_rate),
         ))
@@ -109,6 +111,7 @@ class WorldModel(struct.PyTreeNode):
         params=reward_module.init(
             reward_key, jnp.zeros(latent_dim + action_dim))['params'],
         tx=optax.chain(
+            optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(learning_rate),
         ))
@@ -124,6 +127,7 @@ class WorldModel(struct.PyTreeNode):
         apply_fn=policy_module.apply,
         params=policy_module.init(policy_key, jnp.zeros(latent_dim))['params'],
         tx=optax.chain(
+            optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(learning_rate, eps=1e-5),
         ))
@@ -142,6 +146,7 @@ class WorldModel(struct.PyTreeNode):
             {'params': value_param_key, 'dropout': value_dropout_key},
             jnp.zeros(latent_dim + action_dim))['params'],
         tx=optax.chain(
+            optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(learning_rate),
         ))
@@ -161,6 +166,7 @@ class WorldModel(struct.PyTreeNode):
           params=continue_module.init(
               continue_key, jnp.zeros(latent_dim))['params'],
           tx=optax.chain(
+              optax.zero_nans(),
               optax.clip_by_global_norm(max_grad_norm),
               optax.adam(learning_rate),
           ))
