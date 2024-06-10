@@ -1,8 +1,11 @@
 # tdmpc2-jax
 
-A re-implementation of [TD-MPC2](https://www.tdmpc2.com/) in Jax/Flax. JIT'ing the planning/update steps makes training 5-10x faster compared to the original PyTorch implementation.
+A re-implementation of [TD-MPC2](https://www.tdmpc2.com/) in Jax/Flax. JIT'ing the planning/update steps makes training 5-10x faster than the original PyTorch implementation while maintaining similar or better performance in challenging continuous control environments. 
 
 This repository also supports vectorized environments (see the env field of ```config.yaml```) and finite-horizon environments (see ```world_model.predict_continues``` and ```tdmpc.continue_coef``` in ```config.yaml```).
+
+<img src="media/humanoid-stand.png" width="400"> <img src="media/finger-turn-hard.png" width="400">
+<img src="media/cheetah-run.png" width="400"> <img src="media/walker-run.png" width="400">
 
 ## Usage
 
