@@ -10,10 +10,13 @@ save_interval_steps: 100000
 log_interval_steps: 10000
 
 env:
+  backend: gymnasium
   env_id: HalfCheetah-v4
   num_envs: 4
   utd_ratio: 0.5
   asynchronous: True
+
+  dmc: {obs_type: state}
 
 encoder:
   encoder_dim: 256
@@ -32,7 +35,7 @@ world_model:
   learning_rate: 3e-4
   encoder_learning_rate: 1e-4
   predict_continues: False
-  dtype: bfloat16
+  dtype: float32
   tabulate: False
 
 tdmpc2:

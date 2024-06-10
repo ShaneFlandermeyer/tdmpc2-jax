@@ -57,4 +57,4 @@ def two_hot_inv(x: jax.Array,
   return symexp(x)
 
 
-def sg(x): return jax.tree_map(jax.lax.stop_gradient, x)
+def sg(x): return jax.tree.map(jax.lax.stop_gradient, x)
