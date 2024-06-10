@@ -73,6 +73,7 @@ class WorldModel(struct.PyTreeNode):
         apply_fn=encoder_module.apply,
         params=encoder_module.init(encoder_key, dummy_observation)['params'],
         tx=optax.chain(
+            optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
             encoder_optim(encoder_learning_rate),
         ))
@@ -89,6 +90,7 @@ class WorldModel(struct.PyTreeNode):
         params=dynamics_module.init(
             dynamics_key, jnp.zeros(latent_dim + action_dim))['params'],
         tx=optax.chain(
+            optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(learning_rate),
         ))
@@ -104,6 +106,7 @@ class WorldModel(struct.PyTreeNode):
         params=reward_module.init(
             reward_key, jnp.zeros(latent_dim + action_dim))['params'],
         tx=optax.chain(
+            optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(learning_rate),
         ))
@@ -119,6 +122,7 @@ class WorldModel(struct.PyTreeNode):
         apply_fn=policy_module.apply,
         params=policy_module.init(policy_key, jnp.zeros(latent_dim))['params'],
         tx=optax.chain(
+            optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(learning_rate, eps=1e-5),
         ))
@@ -137,6 +141,7 @@ class WorldModel(struct.PyTreeNode):
             {'params': value_param_key, 'dropout': value_dropout_key},
             jnp.zeros(latent_dim + action_dim))['params'],
         tx=optax.chain(
+            optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(learning_rate),
         ))
@@ -156,6 +161,7 @@ class WorldModel(struct.PyTreeNode):
           params=continue_module.init(
               continue_key, jnp.zeros(latent_dim))['params'],
           tx=optax.chain(
+              optax.zero_nans(),
               optax.clip_by_global_norm(max_grad_norm),
               optax.adam(learning_rate),
           ))
@@ -221,7 +227,7 @@ class WorldModel(struct.PyTreeNode):
   @jax.jit
   def encode(self, obs: np.ndarray, params: Dict) -> jax.Array:
     if self.symlog_obs:
-      obs = jax.tree_map(lambda x: symlog(x), obs)
+      obs = jax.tree.map(lambda x: symlog(x), obs)
     return self.encoder.apply_fn({'params': params}, obs)
 
   @jax.jit
@@ -262,7 +268,7 @@ class WorldModel(struct.PyTreeNode):
     # Squash tanh
     mean = jnp.tanh(mu)
     action = jnp.tanh(x_t)
-    log_probs -= jnp.log((1 - action**2) + 1e-6).sum(-1)
+    log_probs -= jnp.log(nn.relu(1 - action**2) + 1e-6).sum(-1)
 
     return action, mean, log_std, log_probs
 

@@ -7,7 +7,7 @@ import optax
 
 from tdmpc2_jax.world_model import WorldModel
 import jax.numpy as jnp
-from tdmpc2_jax.common.loss import binary_crossentropy, mse_loss, soft_crossentropy
+from tdmpc2_jax.common.loss import soft_crossentropy
 import numpy as np
 from typing import Any, Dict, Optional, Tuple
 from tdmpc2_jax.common.scale import percentile_normalization
@@ -147,7 +147,7 @@ class TDMPC2(struct.PyTreeNode):
     z = jnp.atleast_2d(z)
     # Sample trajectories from policy prior
     key, *prior_keys = jax.random.split(key, self.horizon + 1)
-    policy_actions = jnp.empty(
+    policy_actions = jnp.zeros(
         (self.horizon, self.policy_prior_samples, self.model.action_dim))
     _z = z.repeat(self.policy_prior_samples, axis=0)
     for t in range(self.horizon-1):
@@ -166,7 +166,7 @@ class TDMPC2(struct.PyTreeNode):
     mean = mean.at[:-1].set(prev_plan[0][1:])
     std = std.at[:-1].set(prev_plan[1][1:])
 
-    actions = jnp.empty(
+    actions = jnp.zeros(
         (self.horizon, self.population_size, self.model.action_dim))
     actions = actions.at[:, :self.policy_prior_samples].set(policy_actions)
 
@@ -195,12 +195,14 @@ class TDMPC2(struct.PyTreeNode):
       # Update parameters
       max_value = jnp.max(elite_values)
       score = jnp.exp(self.temperature * (elite_values - max_value))
-      score /= jnp.sum(score) + 1e-6
+      score /= score.sum(0)
 
-      mean = jnp.sum(score[None, :, None] * elite_actions, axis=1)
+      mean = jnp.sum(score[None, :, None] * elite_actions, axis=1) / \
+          (score.sum(0) + 1e-9)
       std = jnp.sqrt(
-          jnp.sum(score[None, :, None] * (elite_actions - mean[:, None, :])**2, axis=1))
-      std = std.clip(self.min_plan_std, self.max_plan_std)
+          jnp.sum(score[None, :, None] * (elite_actions -
+                  mean[:, None, :])**2, axis=1) / (score.sum(0) + 1e-9)
+      ).clip(self.min_plan_std, self.max_plan_std)
 
     # Select action based on the score
     key, *final_action_keys = jax.random.split(key, 3)
@@ -213,7 +215,7 @@ class TDMPC2(struct.PyTreeNode):
         final_action_keys[1], shape=action.shape)
 
     action = action.clip(-1, 1)
-    return sg(action), (mean, std)
+    return action, (mean, std)
 
   @jax.jit
   def update(self,
@@ -227,56 +229,57 @@ class TDMPC2(struct.PyTreeNode):
              key: PRNGKeyArray
              ) -> Tuple[TDMPC2, Dict[str, Any]]:
 
-    target_key, *Q_keys, policy_key = jax.random.split(key, 4)
+    world_model_key, policy_key = jax.random.split(key, 2)
 
     def world_model_loss_fn(encoder_params: Dict,
                             dynamics_params: Dict,
                             value_params: Dict,
                             reward_params: Dict,
                             continue_params: Dict):
+      target_key, Q_key = jax.random.split(world_model_key, 2)
       done = jnp.logical_or(terminated, truncated)
-      discount = jnp.ones((self.horizon+1, self.batch_size))
-      horizon = jnp.zeros(self.batch_size)
+      finished = jnp.zeros((self.horizon+1, self.batch_size), dtype=bool)
 
       next_z = sg(self.model.encode(next_observations, encoder_params))
       td_targets = self.td_target(next_z, rewards, terminated, key=target_key)
 
       # Latent rollout (compute latent dynamics + consistency loss)
-      zs = jnp.empty((self.horizon+1, self.batch_size, next_z.shape[-1]))
-      z = self.model.encode(jax.tree_map(
+      zs = jnp.zeros((self.horizon+1, self.batch_size, next_z.shape[-1]))
+      z = self.model.encode(jax.tree.map(
           lambda x: x[0], observations), encoder_params)
       zs = zs.at[0].set(z)
-      consistency_loss = jnp.zeros(self.batch_size)
+      consistency_loss = 0
       for t in range(self.horizon):
         z = self.model.next(z, actions[t], dynamics_params)
         zs = zs.at[t+1].set(z)
-        consistency_loss += discount[t] * jnp.mean((z - next_z[t])**2, axis=-1)
+        consistency_loss += self.rho**t * \
+            jnp.mean((z - next_z[t])**2, where=~finished[t][:, None])
 
-        # Note: Horizon may differ across trajectories where done = True
-        horizon += (discount[t] > 0).astype(jnp.float32)
-        discount = discount.at[t+1].set(
-            discount[t] * self.rho * (1 - done[t].astype(jnp.float32)))
+        # Keep track of which trajectories have reached a terminal state
+        finished = finished.at[t+1].set(jnp.logical_or(finished[t], done[t]))
 
       # Get logits for loss computations
-      _, q_logits = self.model.Q(zs[:-1], actions, value_params, key=Q_keys[0])
+      _, q_logits = self.model.Q(zs[:-1], actions, value_params, key=Q_key)
       _, reward_logits = self.model.reward(zs[:-1], actions, reward_params)
       if self.model.predict_continues:
         continue_logits = self.model.continue_model.apply_fn(
             {'params': continue_params}, zs[1:]).squeeze(-1)
 
-      reward_loss = jnp.zeros(self.batch_size)
-      value_loss = jnp.zeros(self.batch_size)
+      reward_loss = 0
+      value_loss = 0
       for t in range(self.horizon):
-        reward_loss += soft_crossentropy(reward_logits[t], rewards[t],
-                                         self.model.symlog_min,
-                                         self.model.symlog_max,
-                                         self.model.num_bins) * discount[t]
+        reward_loss += self.rho**t * soft_crossentropy(
+            reward_logits[t], rewards[t],
+            self.model.symlog_min,
+            self.model.symlog_max,
+            self.model.num_bins).mean(where=~finished[t])
 
         for q in range(self.model.num_value_nets):
-          value_loss += soft_crossentropy(q_logits[q, t], td_targets[t],
-                                          self.model.symlog_min,
-                                          self.model.symlog_max,
-                                          self.model.num_bins) * discount[t]
+          value_loss += self.rho**t * soft_crossentropy(
+              q_logits[q, t], td_targets[t],
+              self.model.symlog_min,
+              self.model.symlog_max,
+              self.model.num_bins).mean(where=~finished[t])
 
       if self.model.predict_continues:
         continue_loss = optax.sigmoid_binary_cross_entropy(
@@ -284,9 +287,9 @@ class TDMPC2(struct.PyTreeNode):
       else:
         continue_loss = 0
 
-      consistency_loss = (consistency_loss / horizon).mean()
-      reward_loss = (reward_loss / horizon).mean()
-      value_loss = (value_loss / horizon).mean() / self.model.num_value_nets
+      consistency_loss = consistency_loss / self.horizon
+      reward_loss = reward_loss / self.horizon
+      value_loss = value_loss / self.horizon / self.model.num_value_nets
       total_loss = (
           self.consistency_coef * consistency_loss +
           self.reward_coef * reward_loss +
@@ -333,15 +336,16 @@ class TDMPC2(struct.PyTreeNode):
 
     # Update policy
     def policy_loss_fn(params: Dict):
+      action_key, Q_key = jax.random.split(policy_key, 2)
       actions, _, _, log_probs = self.model.sample_actions(
-          zs, params, key=policy_key)
+          zs, params, key=action_key)
 
       # Compute Q-values
-      Qs, _ = self.model.Q(zs, actions, new_value_model.params, key=Q_keys[1])
+      Qs, _ = self.model.Q(zs, actions, new_value_model.params, key=Q_key)
       Q = Qs.mean(axis=0)
       # Update and apply scale
-      scale = percentile_normalization(Q[0], self.scale)
-      Q /= scale.clip(1, None)
+      scale = percentile_normalization(Q[0], self.scale).clip(1, None)
+      Q = Q / sg(scale)
 
       # Compute policy objective (equation 4)
       rho = self.rho ** jnp.arange(self.horizon+1)
@@ -373,7 +377,7 @@ class TDMPC2(struct.PyTreeNode):
       reward, _ = self.model.reward(
           z, actions[t], self.model.reward_model.params)
       z = self.model.next(z, actions[t], self.model.dynamics_model.params)
-      G += discount * reward.astype(jnp.float32)
+      G += discount * reward
 
       if self.model.predict_continues:
         continues = jax.nn.sigmoid(self.model.continue_model.apply_fn(
@@ -383,16 +387,13 @@ class TDMPC2(struct.PyTreeNode):
 
       discount *= self.discount * continues
 
-    action_key, Q_key, ensemble_key = jax.random.split(key, 3)
+    action_key, Q_key = jax.random.split(key, 2)
     next_action = self.model.sample_actions(
         z, self.model.policy_model.params, key=action_key)[0]
 
     Qs, _ = self.model.Q(
         z, next_action, self.model.value_model.params, key=Q_key)
-    inds = jax.random.choice(ensemble_key,
-                             jnp.arange(0, self.model.num_value_nets),
-                             shape=(2, ), replace=False)
-    Q = Qs[inds].mean(axis=0)
+    Q = Qs.mean(axis=0)
     return sg(G + discount * Q)
 
   @jax.jit
