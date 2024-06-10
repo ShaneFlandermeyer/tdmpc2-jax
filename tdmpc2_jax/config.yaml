@@ -13,14 +13,16 @@ env:
   backend: gymnasium
   env_id: HalfCheetah-v4
   num_envs: 4
-  utd_ratio: 0.5
+  utd_ratio: 0.25
   asynchronous: True
 
-  dmc: {obs_type: state}
+  dmc: { obs_type: state }
 
 encoder:
   encoder_dim: 256
   num_encoder_layers: 2
+  learning_rate: 1e-4
+  tabulate: False
 
 world_model:
   mlp_dim: 512
@@ -33,9 +35,9 @@ world_model:
   symlog_obs: False
   simnorm_dim: 8
   learning_rate: 3e-4
-  encoder_learning_rate: 1e-4
   predict_continues: False
   dtype: float32
+  max_grad_norm: 20
   tabulate: False
 
 tdmpc2:
