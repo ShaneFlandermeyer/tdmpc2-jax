@@ -5,6 +5,7 @@ import flax.linen as nn
 from flax.training.train_state import TrainState
 from flax import struct
 import numpy as np
+from numpy.typing import ArrayLike
 from tdmpc2_jax.networks import NormedLinear
 from tdmpc2_jax.common.activations import mish, simnorm
 from jaxtyping import PRNGKeyArray
@@ -12,7 +13,6 @@ import jax
 import jax.numpy as jnp
 import optax
 from tdmpc2_jax.networks import Ensemble
-import gymnasium as gym
 from tdmpc2_jax.common.util import symlog, two_hot_inv
 
 
@@ -26,8 +26,6 @@ class WorldModel(struct.PyTreeNode):
   target_value_model: TrainState
   continue_model: TrainState
   # Spaces
-  observation_space: gym.Space = struct.field(pytree_node=False)
-  action_space: gym.Space = struct.field(pytree_node=False)
   action_dim: int = struct.field(pytree_node=False)
   # Architecture
   mlp_dim: int = struct.field(pytree_node=False)
@@ -42,10 +40,9 @@ class WorldModel(struct.PyTreeNode):
   @classmethod
   def create(cls,
              # Spaces
-             observation_space: gym.Space,
-             action_space: gym.Space,
+             action_dim: int,
              # Models
-             encoder_module: nn.Module,
+             encoder: TrainState,
              # Architecture
              mlp_dim: int,
              latent_dim: int,
@@ -59,28 +56,15 @@ class WorldModel(struct.PyTreeNode):
              symlog_obs: bool,
              # Optimization
              learning_rate: float,
-             encoder_learning_rate: float,
-             max_grad_norm: float = 10,
+             max_grad_norm: float = 20,
              # Misc
-             encoder_optim: Callable = optax.adam,
              tabulate: bool = False,
              dtype: jnp.dtype = jnp.float32,
              *,
              key: PRNGKeyArray,
              ):
-    encoder_key, dynamics_key, reward_key, value_key, policy_key, continue_key = jax.random.split(
-        key, 6)
-
-    action_dim = np.prod(action_space.shape)
-
-    encoder = TrainState.create(
-        apply_fn=encoder_module.apply,
-        params=encoder_module.init(
-            encoder_key, observation_space.sample())['params'],
-        tx=optax.chain(
-            optax.clip_by_global_norm(max_grad_norm),
-            encoder_optim(encoder_learning_rate),
-        ))
+    dynamics_key, reward_key, value_key, policy_key, continue_key = jax.random.split(
+        key, 5)
 
     # Latent forward dynamics model
     dynamics_module = nn.Sequential([
@@ -94,6 +78,7 @@ class WorldModel(struct.PyTreeNode):
         params=dynamics_module.init(
             dynamics_key, jnp.zeros(latent_dim + action_dim))['params'],
         tx=optax.chain(
+            optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(learning_rate),
         ))
@@ -109,6 +94,7 @@ class WorldModel(struct.PyTreeNode):
         params=reward_module.init(
             reward_key, jnp.zeros(latent_dim + action_dim))['params'],
         tx=optax.chain(
+            optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(learning_rate),
         ))
@@ -124,6 +110,7 @@ class WorldModel(struct.PyTreeNode):
         apply_fn=policy_module.apply,
         params=policy_module.init(policy_key, jnp.zeros(latent_dim))['params'],
         tx=optax.chain(
+            optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(learning_rate, eps=1e-5),
         ))
@@ -142,6 +129,7 @@ class WorldModel(struct.PyTreeNode):
             {'params': value_param_key, 'dropout': value_dropout_key},
             jnp.zeros(latent_dim + action_dim))['params'],
         tx=optax.chain(
+            optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(learning_rate),
         ))
@@ -161,6 +149,7 @@ class WorldModel(struct.PyTreeNode):
           params=continue_module.init(
               continue_key, jnp.zeros(latent_dim))['params'],
           tx=optax.chain(
+              optax.zero_nans(),
               optax.clip_by_global_norm(max_grad_norm),
               optax.adam(learning_rate),
           ))
@@ -168,11 +157,6 @@ class WorldModel(struct.PyTreeNode):
       continue_model = None
 
     if tabulate:
-      print("Encoder")
-      print("-------")
-      print(encoder_module.tabulate(jax.random.key(0),
-            observation_space.sample(), compute_flops=True))
-
       print("Dynamics Model")
       print("--------------")
       print(dynamics_module.tabulate(jax.random.key(0), jnp.ones(
@@ -203,8 +187,6 @@ class WorldModel(struct.PyTreeNode):
 
     return cls(
         # Spaces
-        observation_space=observation_space,
-        action_space=action_space,
         action_dim=action_dim,
         # Models
         encoder=encoder,
@@ -228,7 +210,7 @@ class WorldModel(struct.PyTreeNode):
   @jax.jit
   def encode(self, obs: np.ndarray, params: Dict) -> jax.Array:
     if self.symlog_obs:
-      obs = jax.tree_map(lambda x: symlog(x), obs)
+      obs = jax.tree.map(lambda x: symlog(x), obs)
     return self.encoder.apply_fn({'params': params}, obs)
 
   @jax.jit
@@ -269,7 +251,7 @@ class WorldModel(struct.PyTreeNode):
     # Squash tanh
     mean = jnp.tanh(mu)
     action = jnp.tanh(x_t)
-    log_probs -= jnp.log((1 - action**2) + 1e-6).sum(-1)
+    log_probs -= jnp.log(nn.relu(1 - action**2) + 1e-6).sum(-1)
 
     return action, mean, log_std, log_probs
 

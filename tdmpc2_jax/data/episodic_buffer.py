@@ -13,7 +13,7 @@ class EpisodicReplayBuffer():
                seed: Optional[int] = None,
                respect_episode_boundaries: bool = True):
     self.capacity = capacity
-    self.data = jax.tree_map(lambda x: np.empty(
+    self.data = jax.tree.map(lambda x: np.empty(
         (capacity,) + np.asarray(x).shape, np.asarray(x).dtype), dummy_input)
 
     self.respect_episode_boundaries = respect_episode_boundaries
@@ -31,7 +31,7 @@ class EpisodicReplayBuffer():
 
   def insert(self, data: Dict, episode_index: int) -> None:
     # Insert the data
-    jax.tree_map(lambda x, y: x.__setitem__(self.current_ind, y),
+    jax.tree.map(lambda x, y: x.__setitem__(self.current_ind, y),
                  self.data, data)
 
     # Remove the oldest episode information if it gets overwritten
@@ -71,7 +71,7 @@ class EpisodicReplayBuffer():
     sequence_inds = buffer_starts[:, None] + np.arange(sequence_length)
     sequence_inds = sequence_inds % self.capacity
 
-    return jax.tree_map(lambda x: np.swapaxes(x[sequence_inds], 0, 1),
+    return jax.tree.map(lambda x: np.swapaxes(x[sequence_inds], 0, 1),
                         self.data)
 
 

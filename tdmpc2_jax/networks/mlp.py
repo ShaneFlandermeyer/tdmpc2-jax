@@ -8,7 +8,7 @@ import jax
 
 class NormedLinear(nn.Module):
   features: int
-  activation: Callable[[jax.Array], jax.Array] = nn.relu
+  activation: Callable[[jax.Array], jax.Array] = None
   dropout_rate: Optional[float] = None
   norm: nn.Module = nn.LayerNorm
 
@@ -24,7 +24,7 @@ class NormedLinear(nn.Module):
                  dtype=self.dtype,
                  param_dtype=self.param_dtype)(x)
 
-    x = self.norm()(x)
+    x = self.norm(dtype=self.dtype)(x)
 
     if self.activation is not None:
       x = self.activation(x)
