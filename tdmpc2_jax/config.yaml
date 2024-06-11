@@ -13,7 +13,7 @@ env:
   backend: gymnasium
   env_id: HalfCheetah-v4
   num_envs: 4
-  utd_ratio: 0.25
+  utd_ratio: 0.5
   asynchronous: True
 
   dmc: { obs_type: state }
