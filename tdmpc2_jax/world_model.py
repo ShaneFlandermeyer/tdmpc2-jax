@@ -5,6 +5,7 @@ import flax.linen as nn
 from flax.training.train_state import TrainState
 from flax import struct
 import numpy as np
+from numpy.typing import ArrayLike
 from tdmpc2_jax.networks import NormedLinear
 from tdmpc2_jax.common.activations import mish, simnorm
 from jaxtyping import PRNGKeyArray
@@ -12,7 +13,6 @@ import jax
 import jax.numpy as jnp
 import optax
 from tdmpc2_jax.networks import Ensemble
-import gymnasium as gym
 from tdmpc2_jax.common.util import symlog, two_hot_inv
 
 
@@ -26,8 +26,6 @@ class WorldModel(struct.PyTreeNode):
   target_value_model: TrainState
   continue_model: TrainState
   # Spaces
-  observation_space: gym.Space = struct.field(pytree_node=False)
-  action_space: gym.Space = struct.field(pytree_node=False)
   action_dim: int = struct.field(pytree_node=False)
   # Architecture
   mlp_dim: int = struct.field(pytree_node=False)
@@ -42,10 +40,9 @@ class WorldModel(struct.PyTreeNode):
   @classmethod
   def create(cls,
              # Spaces
-             observation_space: gym.Space,
-             action_space: gym.Space,
+             action_dim: int,
              # Models
-             encoder_module: nn.Module,
+             encoder: TrainState,
              # Architecture
              mlp_dim: int,
              latent_dim: int,
@@ -59,29 +56,15 @@ class WorldModel(struct.PyTreeNode):
              symlog_obs: bool,
              # Optimization
              learning_rate: float,
-             encoder_learning_rate: float,
              max_grad_norm: float = 20,
              # Misc
-             encoder_optim: Callable = optax.adam,
              tabulate: bool = False,
              dtype: jnp.dtype = jnp.float32,
              *,
              key: PRNGKeyArray,
              ):
-    encoder_key, dynamics_key, reward_key, value_key, policy_key, continue_key = jax.random.split(
-        key, 6)
-
-    action_dim = np.prod(action_space.shape)
-
-    encoder = TrainState.create(
-        apply_fn=encoder_module.apply,
-        params=encoder_module.init(
-            encoder_key, observation_space.sample())['params'],
-        tx=optax.chain(
-            optax.zero_nans(),
-            optax.clip_by_global_norm(max_grad_norm),
-            encoder_optim(encoder_learning_rate),
-        ))
+    dynamics_key, reward_key, value_key, policy_key, continue_key = jax.random.split(
+        key, 5)
 
     # Latent forward dynamics model
     dynamics_module = nn.Sequential([
@@ -174,11 +157,6 @@ class WorldModel(struct.PyTreeNode):
       continue_model = None
 
     if tabulate:
-      print("Encoder")
-      print("-------")
-      print(encoder_module.tabulate(jax.random.key(0),
-            observation_space.sample(), compute_flops=True))
-
       print("Dynamics Model")
       print("--------------")
       print(dynamics_module.tabulate(jax.random.key(0), jnp.ones(
@@ -209,8 +187,6 @@ class WorldModel(struct.PyTreeNode):
 
     return cls(
         # Spaces
-        observation_space=observation_space,
-        action_space=action_space,
         action_dim=action_dim,
         # Models
         encoder=encoder,
