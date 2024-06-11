@@ -99,7 +99,7 @@ def train(cfg: dict):
       env.step(dummy_action)
   replay_buffer = SequentialReplayBuffer(
       capacity=cfg.max_steps//env_config.num_envs,
-      num_envs=env.num_envs,
+      num_envs=env_config.num_envs,
       seed=cfg.seed,
       dummy_input=dict(
           observation=dummy_obs,
@@ -167,11 +167,11 @@ def train(cfg: dict):
     # Training loop
     ##############################
     ep_info = {}
-    ep_count = np.zeros(env.num_envs, dtype=int)
+    ep_count = np.zeros(env_config.num_envs, dtype=int)
     prev_logged_step = global_step
     prev_plan = (
-        jnp.zeros((env.num_envs, agent.horizon, agent.model.action_dim)),
-        jnp.full((env.num_envs, agent.horizon,
+        jnp.zeros((env_config.num_envs, agent.horizon, agent.model.action_dim)),
+        jnp.full((env_config.num_envs, agent.horizon,
                   agent.model.action_dim), agent.max_plan_std)
     )
     observation, _ = env.reset(seed=cfg.seed)
