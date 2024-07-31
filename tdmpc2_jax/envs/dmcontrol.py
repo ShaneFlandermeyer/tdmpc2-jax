@@ -1,9 +1,9 @@
 from collections import defaultdict
-from envs.wrappers.pixels import PixelWrapper
+from tdmpc2_jax.envs.wrappers.pixels import PixelWrapper
 from typing import Any, NamedTuple
 import dm_env
 import numpy as np
-from envs.tasks import cheetah, walker, hopper, reacher, ball_in_cup, pendulum, fish
+from tdmpc2_jax.envs.tasks import cheetah, walker, hopper, reacher, ball_in_cup, pendulum, fish
 from dm_control import suite
 suite.ALL_TASKS = suite.ALL_TASKS + suite._get_tasks('custom')
 suite.TASKS_BY_DOMAIN = suite._get_tasks_by_domain(suite.ALL_TASKS)
