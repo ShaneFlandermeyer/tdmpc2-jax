@@ -264,19 +264,23 @@ class WorldModel(struct.PyTreeNode):
 
     return action, mean, log_std, log_probs
 
-  @jax.jit
+  @partial(jax.jit, static_argnames=('train',))
   def Q(self,
         z: jax.Array,
         a: jax.Array,
         params: Dict,
         batch_stats: Dict,
-        key: PRNGKeyArray
+        key: PRNGKeyArray,
+        train: bool
         ) -> Tuple[jax.Array, jax.Array]:
     z = jnp.concatenate([z, a], axis=-1)
     
-    logits, updates = self.value_model.apply_fn(
+    logits, state_updates = self.value_model.apply_fn(
         {'params': params, 'batch_stats': batch_stats},
-        z, rngs={'dropout': key}, mutable=['batch_stats'])
+        z, 
+        rngs={'dropout': key}, 
+        mutable=['batch_stats'],
+        train=train)
 
     Q = two_hot_inv(logits, self.symlog_min, self.symlog_max, self.num_bins)
-    return Q, logits, updates
+    return Q, logits, state_updates

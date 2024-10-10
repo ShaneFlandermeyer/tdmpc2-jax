@@ -259,7 +259,7 @@ class TDMPC2(struct.PyTreeNode):
             {'params': continue_params}, zs[1:]).squeeze(-1)
 
       # Compute TD target
-      action_key, Q_key = jax.random.split(key, 2)
+      action_key, Q_key = jax.random.split(world_model_key, 2)
       next_action = self.model.sample_actions(
           next_z, self.model.policy_model.params, key=action_key)[0]
 
@@ -268,9 +268,10 @@ class TDMPC2(struct.PyTreeNode):
           jnp.concatenate([actions, next_action], axis=0),
           params=value_params,
           batch_stats=self.model.value_model.batch_stats,
-          key=Q_key
+          key=Q_key,
+          train=True
       )
-      
+
       _, next_Q = jnp.split(all_Q, 2, axis=1)
       q_logits, _ = jnp.split(all_Q_logits, 2, axis=1)
       next_Q = jnp.min(next_Q, axis=0)
@@ -335,7 +336,7 @@ class TDMPC2(struct.PyTreeNode):
         grads=reward_grads)
     new_value_model = self.model.value_model.apply_gradients(
         grads=value_grads)
-    new_value_model= self.model.value_model.replace(
+    new_value_model = new_value_model.replace(
         batch_stats=model_info['batch_stats'])
     if self.model.predict_continues:
       new_continue_model = self.model.continue_model.apply_gradients(
@@ -350,7 +351,11 @@ class TDMPC2(struct.PyTreeNode):
           zs, params, key=action_key)
 
       # Compute Q-values
-      Qs, _ = self.model.Q(zs, actions, new_value_model.params, key=Q_key)
+      Qs, _, _ = self.model.Q(zs, actions,
+                              params=new_value_model.params,
+                              batch_stats=new_value_model.batch_stats,
+                              key=Q_key,
+                              train=False)
       Q = Qs.mean(axis=0)
       # Update and apply scale
       scale = percentile_normalization(Q[0], self.scale).clip(1, None)
@@ -399,7 +404,10 @@ class TDMPC2(struct.PyTreeNode):
     next_action = self.model.sample_actions(
         z, self.model.policy_model.params, key=action_key)[0]
 
-    Qs, _ = self.model.Q(
-        z, next_action, self.model.value_model.params, key=Q_key)
+    Qs, _, _ = self.model.Q(z, next_action,
+                            params=self.model.value_model.params,
+                            batch_stats=self.model.value_model.batch_stats,
+                            key=Q_key,
+                            train=False)
     Q = Qs.mean(axis=0)
     return sg(G + discount * Q)
