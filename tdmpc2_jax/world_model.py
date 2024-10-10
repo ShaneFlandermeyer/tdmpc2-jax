@@ -1,6 +1,6 @@
 import copy
 from functools import partial
-from typing import Dict, Tuple, Callable
+from typing import Any, Dict, Optional, Tuple, Callable
 import flax.linen as nn
 from flax.training.train_state import TrainState
 from flax import struct
@@ -14,6 +14,13 @@ import jax.numpy as jnp
 import optax
 from tdmpc2_jax.networks import Ensemble
 from tdmpc2_jax.common.util import symlog, two_hot_inv
+from tdmpc2_jax.networks.crossq import VectorCritic
+
+from flax.training import train_state
+
+
+class TrainState(train_state.TrainState):
+  batch_stats: Optional[Any] = None
 
 
 class WorldModel(struct.PyTreeNode):
@@ -23,7 +30,6 @@ class WorldModel(struct.PyTreeNode):
   reward_model: TrainState
   policy_model: TrainState
   value_model: TrainState
-  target_value_model: TrainState
   continue_model: TrainState
   # Spaces
   action_dim: int = struct.field(pytree_node=False)
@@ -116,28 +122,32 @@ class WorldModel(struct.PyTreeNode):
         ))
 
     # Return/value model (ensemble)
-    value_param_key, value_dropout_key = jax.random.split(value_key)
-    value_base = partial(nn.Sequential, [
-        NormedLinear(mlp_dim, activation=mish,
-                     dropout_rate=value_dropout, dtype=dtype),
-        NormedLinear(mlp_dim, activation=mish, dtype=dtype),
-        nn.Dense(num_bins, kernel_init=nn.initializers.zeros)])
-    value_ensemble = Ensemble(value_base, num=num_value_nets)
+    value_param_key, value_dropout_key, value_bn_key = jax.random.split(
+        value_key, 3)
+    value_ensemble = VectorCritic(
+        net_arch=[mlp_dim, mlp_dim],
+        activation=mish,
+        batch_norm_momentum=0.9,
+        use_batch_norm=True,
+        batch_norm_mode='brn',
+        use_layer_norm=False,
+        dropout_rate=value_dropout,
+        n_critics=num_value_nets,
+    )
+    value_variables = value_ensemble.init(
+        {'params': value_param_key, 'dropout': value_dropout_key,
+         'batch_stats': value_bn_key},
+        jnp.zeros(latent_dim + action_dim),
+        train=False)
     value_model = TrainState.create(
         apply_fn=value_ensemble.apply,
-        params=value_ensemble.init(
-            {'params': value_param_key, 'dropout': value_dropout_key},
-            jnp.zeros(latent_dim + action_dim))['params'],
+        params=value_variables['params'],
+        batch_stats=value_variables['batch_stats'],
         tx=optax.chain(
             optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(learning_rate),
         ))
-    target_value_model = TrainState.create(
-        apply_fn=value_ensemble.apply,
-        params=copy.deepcopy(value_model.params),
-        tx=optax.GradientTransformation(lambda _: None, lambda _: None))
-
     if predict_continues:
       continue_module = nn.Sequential([
           NormedLinear(mlp_dim, activation=mish, dtype=dtype),
@@ -194,7 +204,6 @@ class WorldModel(struct.PyTreeNode):
         reward_model=reward_model,
         policy_model=policy_model,
         value_model=value_model,
-        target_value_model=target_value_model,
         continue_model=continue_model,
         # Architecture
         mlp_dim=mlp_dim,
@@ -256,11 +265,18 @@ class WorldModel(struct.PyTreeNode):
     return action, mean, log_std, log_probs
 
   @jax.jit
-  def Q(self, z: jax.Array, a: jax.Array, params: Dict, key: PRNGKeyArray
+  def Q(self,
+        z: jax.Array,
+        a: jax.Array,
+        params: Dict,
+        batch_stats: Dict,
+        key: PRNGKeyArray
         ) -> Tuple[jax.Array, jax.Array]:
     z = jnp.concatenate([z, a], axis=-1)
-    logits = self.value_model.apply_fn(
-        {'params': params}, z, rngs={'dropout': key})
+    
+    logits, updates = self.value_model.apply_fn(
+        {'params': params, 'batch_stats': batch_stats},
+        z, rngs={'dropout': key}, mutable=['batch_stats'])
 
     Q = two_hot_inv(logits, self.symlog_min, self.symlog_max, self.num_bins)
-    return Q, logits
+    return Q, logits, updates

@@ -12,9 +12,9 @@ log_interval_steps: 10000
 env:
   backend: gymnasium
   env_id: HalfCheetah-v4
-  num_envs: 4
-  utd_ratio: 0.5
-  asynchronous: True
+  num_envs: 1
+  utd_ratio: 1
+  asynchronous: False
 
   dmc: { obs_type: state }
 
@@ -28,7 +28,7 @@ world_model:
   mlp_dim: 512
   latent_dim: 512
   value_dropout: 0.01
-  num_value_nets: 5
+  num_value_nets: 2
   num_bins: 101
   symlog_min: -10
   symlog_max: 10
@@ -60,4 +60,4 @@ tdmpc2:
   continue_coef: 1.0
   value_coef: 0.1
   entropy_coef: 1e-4
-  tau: 0.01
+  # tau: 0.01
