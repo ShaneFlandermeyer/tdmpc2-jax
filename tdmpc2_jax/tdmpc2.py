@@ -241,7 +241,7 @@ class TDMPC2(struct.PyTreeNode):
       done = jnp.logical_or(terminated, truncated)
       finished = jnp.zeros((self.horizon+1, self.batch_size), dtype=bool)
 
-      # Combined encoder forward pass
+      # Encoder forward pass
       first_obs = jax.tree.map(lambda x: x[0], observations)
       first_and_next_obs = jax.tree.map(
           lambda x, y: jnp.concatenate([x[None, ...], y], axis=0),
@@ -250,42 +250,50 @@ class TDMPC2(struct.PyTreeNode):
           first_and_next_obs, encoder_params, key=encoder_key)
       first_z, next_z = first_and_next_z[0], sg(first_and_next_z[1:])
 
-      # Latent rollout (compute latent dynamics + consistency loss)
-      zs = jnp.zeros((self.horizon+1, self.batch_size, next_z.shape[-1]))
-      zs = zs.at[0].set(first_z)
-      consistency_loss = 0
-      for t in range(self.horizon):
+      # Latent rollout + consistency loss
+      def latent_rollout(carry, t):
+        zs, finished, consistency_loss = carry
         z = self.model.next(zs[t], actions[t], dynamics_params)
         zs = zs.at[t+1].set(z)
         consistency_loss += self.rho**t * \
             jnp.mean((z - next_z[t])**2, where=~finished[t][:, None])
         finished = finished.at[t+1].set(jnp.logical_or(finished[t], done[t]))
+        return (zs, finished, consistency_loss), None
 
-      # Logits for reward/value/continue losses
-      _, q_logits = self.model.Q(zs[:-1], actions, value_params, key=Q_key)
+      zs = jnp.zeros((self.horizon+1, self.batch_size, next_z.shape[-1]))
+      zs = zs.at[0].set(first_z)
+      finished = jnp.zeros((self.horizon+1, self.batch_size), dtype=bool)
+      consistency_loss = 0
+      (zs, finished, consistency_loss), _ = jax.lax.scan(
+          f=latent_rollout,
+          init=(zs, finished, consistency_loss),
+          xs=jnp.arange(self.horizon)
+      )
+
+      # Reward loss
       _, reward_logits = self.model.reward(zs[:-1], actions, reward_params)
+      reward_loss = jnp.sum(
+          self.rho**np.arange(self.horizon) * soft_crossentropy(
+              reward_logits, rewards,
+              self.model.symlog_min,
+              self.model.symlog_max,
+              self.model.num_bins).mean(axis=-1, where=~finished[:-1]))
+
+      # Value loss
+      _, q_logits = self.model.Q(zs[:-1], actions, value_params, key=Q_key)
+      td_targets = self.td_target(
+          next_z, rewards, terminated, key=td_target_key)
+      value_loss = jnp.sum(
+          self.rho**np.arange(self.horizon) * soft_crossentropy(
+              q_logits, td_targets,
+              self.model.symlog_min,
+              self.model.symlog_max,
+              self.model.num_bins).mean(axis=-1, where=~finished[:-1]))
+
+      # Continue loss
       if self.model.predict_continues:
         continue_logits = self.model.continue_model.apply_fn(
             {'params': continue_params}, zs[1:]).squeeze(-1)
-
-      td_targets = self.td_target(
-          next_z, rewards, terminated, key=td_target_key)
-      reward_loss, value_loss = 0.0, 0.0
-      for t in range(self.horizon):
-        reward_loss += self.rho**t * soft_crossentropy(
-            reward_logits[t], rewards[t],
-            self.model.symlog_min,
-            self.model.symlog_max,
-            self.model.num_bins).mean(where=~finished[t])
-
-        for q in range(self.model.num_value_nets):
-          value_loss += self.rho**t * soft_crossentropy(
-              q_logits[q, t], td_targets[t],
-              self.model.symlog_min,
-              self.model.symlog_max,
-              self.model.num_bins).mean(where=~finished[t])
-
-      if self.model.predict_continues:
         continue_loss = optax.sigmoid_binary_cross_entropy(
             continue_logits, 1 - terminated).mean()
       else:
