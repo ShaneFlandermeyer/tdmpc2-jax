@@ -93,10 +93,10 @@ class TDMPC2(struct.PyTreeNode):
           train: bool = True,
           *,
           key: PRNGKeyArray):
-    z = self.model.encode(obs, self.model.encoder.params)
+    plan_key, encoder_key = jax.random.split(key, 2)
+    z = self.model.encode(obs, self.model.encoder.params, key=encoder_key)
 
     if self.mpc:
-
       num_envs = z.shape[0] if z.ndim > 1 else 1
       if prev_plan is None:
         prev_plan = (
@@ -106,7 +106,8 @@ class TDMPC2(struct.PyTreeNode):
         )
 
       action, plan = self.plan(
-          jnp.atleast_2d(z), prev_plan, train, jax.random.split(key, num_envs))
+          jnp.atleast_2d(z), prev_plan, train,
+          jax.random.split(plan_key, num_envs))
       action = action.squeeze(0) if z.ndim == 1 else action
 
     else:
@@ -236,37 +237,40 @@ class TDMPC2(struct.PyTreeNode):
                             value_params: Dict,
                             reward_params: Dict,
                             continue_params: Dict):
-      target_key, Q_key = jax.random.split(world_model_key, 2)
+      encoder_key, td_target_key, Q_key = jax.random.split(world_model_key, 3)
       done = jnp.logical_or(terminated, truncated)
       finished = jnp.zeros((self.horizon+1, self.batch_size), dtype=bool)
 
-      next_z = sg(self.model.encode(next_observations, encoder_params))
-      td_targets = self.td_target(next_z, rewards, terminated, key=target_key)
+      # Combined encoder forward pass
+      first_obs = jax.tree.map(lambda x: x[0], observations)
+      first_and_next_obs = jax.tree.map(
+          lambda x, y: jnp.concatenate([x[None, ...], y], axis=0),
+          first_obs, next_observations)
+      first_and_next_z = self.model.encode(
+          first_and_next_obs, encoder_params, key=encoder_key)
+      first_z, next_z = first_and_next_z[0], sg(first_and_next_z[1:])
 
       # Latent rollout (compute latent dynamics + consistency loss)
       zs = jnp.zeros((self.horizon+1, self.batch_size, next_z.shape[-1]))
-      z = self.model.encode(jax.tree.map(
-          lambda x: x[0], observations), encoder_params)
-      zs = zs.at[0].set(z)
+      zs = zs.at[0].set(first_z)
       consistency_loss = 0
       for t in range(self.horizon):
-        z = self.model.next(z, actions[t], dynamics_params)
+        z = self.model.next(zs[t], actions[t], dynamics_params)
         zs = zs.at[t+1].set(z)
         consistency_loss += self.rho**t * \
             jnp.mean((z - next_z[t])**2, where=~finished[t][:, None])
-
-        # Keep track of which trajectories have reached a terminal state
         finished = finished.at[t+1].set(jnp.logical_or(finished[t], done[t]))
 
-      # Get logits for loss computations
+      # Logits for reward/value/continue losses
       _, q_logits = self.model.Q(zs[:-1], actions, value_params, key=Q_key)
       _, reward_logits = self.model.reward(zs[:-1], actions, reward_params)
       if self.model.predict_continues:
         continue_logits = self.model.continue_model.apply_fn(
             {'params': continue_params}, zs[1:]).squeeze(-1)
 
-      reward_loss = 0
-      value_loss = 0
+      td_targets = self.td_target(
+          next_z, rewards, terminated, key=td_target_key)
+      reward_loss, value_loss = 0.0, 0.0
       for t in range(self.horizon):
         reward_loss += self.rho**t * soft_crossentropy(
             reward_logits[t], rewards[t],
@@ -285,7 +289,7 @@ class TDMPC2(struct.PyTreeNode):
         continue_loss = optax.sigmoid_binary_cross_entropy(
             continue_logits, 1 - terminated).mean()
       else:
-        continue_loss = 0
+        continue_loss = 0.0
 
       consistency_loss = consistency_loss / self.horizon
       reward_loss = reward_loss / self.horizon
