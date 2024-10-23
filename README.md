@@ -7,8 +7,6 @@ This repository also supports vectorized environments (see the env field of ```c
 <img src="media/humanoid-stand.png" width="400"> <img src="media/finger-turn-hard.png" width="400">
 <img src="media/cheetah-run.png" width="400"> <img src="media/walker-run.png" width="400">
 
-This repository also supports vectorized environments (see the env field of ```config.yaml```) and finite-horizon environments (see ```world_model.predict_continues``` and ```tdmpc.continue_coef``` in ```config.yaml```).
-
 ## Usage
 
 To install the dependencies for this project (tested on Ubuntu 22.04), run

@@ -17,14 +17,14 @@ class NormedLinear(nn.Module):
   param_dtype: jnp.dtype = jnp.float32
 
   @nn.compact
-  def __call__(self, x: jax.Array, training: bool = True) -> jax.Array:
+  def __call__(self, x: jax.Array, mask: Optional[jax.Array] = None, training: bool = True) -> jax.Array:
     x = nn.Dense(features=self.features,
                  kernel_init=self.kernel_init,
                  bias_init=nn.initializers.zeros_init(),
                  dtype=self.dtype,
                  param_dtype=self.param_dtype)(x)
 
-    x = self.norm(dtype=self.dtype)(x)
+    x = self.norm(dtype=self.dtype)(x, mask=mask)
 
     if self.activation is not None:
       x = self.activation(x)
