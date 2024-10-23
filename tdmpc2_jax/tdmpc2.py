@@ -104,15 +104,14 @@ class TDMPC2(struct.PyTreeNode):
             jnp.full((num_envs, self.horizon, self.model.action_dim),
                      self.max_plan_std)
         )
-
       action, plan = self.plan(
-          jnp.atleast_2d(z), prev_plan, train,
+          z, prev_plan, train,
           jax.random.split(plan_key, num_envs))
       action = action.squeeze(0) if z.ndim == 1 else action
 
     else:
       action = self.model.sample_actions(
-          z, self.model.policy_model.params, key=key)[0]
+          z, self.model.policy_model.params, key=plan_key)[0]
       plan = None
 
     return np.array(action), plan
@@ -146,77 +145,80 @@ class TDMPC2(struct.PyTreeNode):
         - Final mean value (for use in warm start)
     """
     z = jnp.atleast_2d(z)
-    
-    # Sample trajectories from policy prior
-    key, *prior_keys = jax.random.split(key, self.horizon + 1)
+
+    # Policy prior trajectories
+    key, *prior_noise_keys = jax.random.split(key, 1+self.horizon)
     policy_actions = jnp.zeros(
         (self.horizon, self.policy_prior_samples, self.model.action_dim))
-    _z = z.repeat(self.policy_prior_samples, axis=0)
+    z_t = z.repeat(self.policy_prior_samples, axis=0)
     for t in range(self.horizon-1):
       policy_actions = policy_actions.at[t].set(
-          self.model.sample_actions(_z, self.model.policy_model.params, key=prior_keys[t])[0])
-      _z = self.model.next(
-          _z, policy_actions[t], self.model.dynamics_model.params)
+          self.model.sample_actions(
+              z_t, self.model.policy_model.params, key=prior_noise_keys[t])[0]
+      )
+      z_t = self.model.next(
+          z_t, policy_actions[t], self.model.dynamics_model.params
+      )
     policy_actions = policy_actions.at[-1].set(
-        self.model.sample_actions(_z, self.model.policy_model.params, key=prior_keys[-1])[0])
-    
+        self.model.sample_actions(
+            z_t, self.model.policy_model.params, key=prior_noise_keys[-1])[0]
+    )
+
     actions = jnp.zeros(
         (self.horizon, self.population_size, self.model.action_dim))
     actions = actions.at[:, :self.policy_prior_samples].set(policy_actions)
 
-    # Initialize population state
-    z = z.repeat(self.population_size, axis=0)
-    mean = jnp.zeros((self.horizon, self.model.action_dim))
-    std = jnp.full((self.horizon, self.model.action_dim), self.max_plan_std)
-    # Warm start MPPI with the previous solution
-    mean = mean.at[:-1].set(prev_plan[0][1:])
-    std = std.at[:-1].set(prev_plan[1][1:])
-
-    # Iterate MPPI
-    key, action_noise_key, *value_keys = \
-        jax.random.split(key, self.mppi_iterations+1+1)
+    # MPPI
+    key, mppi_noise_key, *value_keys = \
+        jax.random.split(key, 2+self.mppi_iterations)
     noise = jax.random.normal(
-        action_noise_key,
+        mppi_noise_key,
         shape=(
             self.mppi_iterations,
             self.horizon,
             self.population_size - self.policy_prior_samples,
             self.model.action_dim
         ))
+    # Initialize population state
+    z_t = z.repeat(self.population_size, axis=0)
+    mean = jnp.zeros((self.horizon, self.model.action_dim))
+    std = jnp.full((self.horizon, self.model.action_dim), self.max_plan_std)
+    # Warm start with previous plan
+    mean = mean.at[:-1].set(prev_plan[0][1:])
+    std = std.at[:-1].set(prev_plan[1][1:])
+
     for i in range(self.mppi_iterations):
       # Sample actions
       actions = actions.at[:, self.policy_prior_samples:].set(
-          mean[:, None, :] + std[:, None, :] * noise[i])
+          mean[:, None, :] + std[:, None, :] * noise[i]
+      )
       actions = actions.clip(-1, 1)
 
-      # Compute elite actions
-      value = self.estimate_value(z, actions, key=value_keys[i])
+      # Compute elites
+      value = self.estimate_value(z_t, actions, key=value_keys[i])
       _, elite_inds = jax.lax.top_k(value, self.num_elites)
       elite_values, elite_actions = value[elite_inds], actions[:, elite_inds]
 
-      # Update parameters
-      max_value = jnp.max(elite_values)
-      score = jnp.exp(self.temperature * (elite_values - max_value))
-      score /= score.sum(0)
-
-      mean = jnp.sum(score[None, :, None] * elite_actions, axis=1) / \
-          (score.sum(0) + 1e-9)
+      # Update population distribution
+      score = jnp.exp(self.temperature * (elite_values - elite_values.max()))
+      score /= score.sum(axis=0) + jnp.finfo(score.dtype).eps
+      mean = jnp.sum(score[None, :, None] * elite_actions, axis=1)
       std = jnp.sqrt(
-          jnp.sum(score[None, :, None] * (elite_actions -
-                  mean[:, None, :])**2, axis=1) / (score.sum(0) + 1e-9)
+          jnp.sum(score[None, :, None] *
+                  (elite_actions - mean[:, None, :])**2, axis=1)
       ).clip(self.min_plan_std, self.max_plan_std)
 
-    # Select action based on the score
-    key, *final_action_keys = jax.random.split(key, 3)
-    action_ind = jax.random.choice(final_action_keys[0],
-                                   a=jnp.arange(self.num_elites), p=score)
+    # Sample final action
+    key, action_select_key, action_noise_key = jax.random.split(key, 3)
+    action_ind = jax.random.choice(
+        action_select_key, a=jnp.arange(self.num_elites), p=score)
     actions = elite_actions[:, action_ind]
 
     action, action_std = actions[0], std[0]
-    action += jnp.array(train, float) * action_std * jax.random.normal(
-        final_action_keys[1], shape=action.shape)
-
+    action += jnp.array(train, float) * \
+        action_std * jax.random.normal(action_noise_key, shape=action.shape)
     action = action.clip(-1, 1)
+
     return action, (mean, std)
 
   @jax.jit
@@ -289,7 +291,6 @@ class TDMPC2(struct.PyTreeNode):
             continue_logits, 1 - terminated).mean()
       else:
         continue_loss = 0.0
-
 
       consistency_loss = consistency_loss / self.horizon
       reward_loss = reward_loss / self.horizon
