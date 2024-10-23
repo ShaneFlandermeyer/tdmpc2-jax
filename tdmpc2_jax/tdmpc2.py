@@ -146,6 +146,7 @@ class TDMPC2(struct.PyTreeNode):
         - Final mean value (for use in warm start)
     """
     z = jnp.atleast_2d(z)
+    
     # Sample trajectories from policy prior
     key, *prior_keys = jax.random.split(key, self.horizon + 1)
     policy_actions = jnp.zeros(
@@ -158,6 +159,10 @@ class TDMPC2(struct.PyTreeNode):
           _z, policy_actions[t], self.model.dynamics_model.params)
     policy_actions = policy_actions.at[-1].set(
         self.model.sample_actions(_z, self.model.policy_model.params, key=prior_keys[-1])[0])
+    
+    actions = jnp.zeros(
+        (self.horizon, self.population_size, self.model.action_dim))
+    actions = actions.at[:, :self.policy_prior_samples].set(policy_actions)
 
     # Initialize population state
     z = z.repeat(self.population_size, axis=0)
@@ -166,10 +171,6 @@ class TDMPC2(struct.PyTreeNode):
     # Warm start MPPI with the previous solution
     mean = mean.at[:-1].set(prev_plan[0][1:])
     std = std.at[:-1].set(prev_plan[1][1:])
-
-    actions = jnp.zeros(
-        (self.horizon, self.population_size, self.model.action_dim))
-    actions = actions.at[:, :self.policy_prior_samples].set(policy_actions)
 
     # Iterate MPPI
     key, action_noise_key, *value_keys = \
@@ -238,37 +239,27 @@ class TDMPC2(struct.PyTreeNode):
                             reward_params: Dict,
                             continue_params: Dict):
       encoder_key, td_target_key, Q_key = jax.random.split(world_model_key, 3)
+
+      # Encoder forward passes
+      first_encoder_key, next_encoder_key = jax.random.split(encoder_key, 2)
+      first_z = self.model.encode(
+          jax.tree.map(lambda x: x[0], observations), encoder_params,
+          key=first_encoder_key)
+      next_z = sg(self.model.encode(next_observations,
+                  encoder_params, key=next_encoder_key))
+
+      # Latent rollout (compute latent dynamics + consistency loss)
       done = jnp.logical_or(terminated, truncated)
       finished = jnp.zeros((self.horizon+1, self.batch_size), dtype=bool)
-
-      # Encoder forward pass
-      first_obs = jax.tree.map(lambda x: x[0], observations)
-      first_and_next_obs = jax.tree.map(
-          lambda x, y: jnp.concatenate([x[None, ...], y], axis=0),
-          first_obs, next_observations)
-      first_and_next_z = self.model.encode(
-          first_and_next_obs, encoder_params, key=encoder_key)
-      first_z, next_z = first_and_next_z[0], sg(first_and_next_z[1:])
-
-      # Latent rollout + consistency loss
-      def latent_rollout(carry, t):
-        zs, finished, consistency_loss = carry
+      consistency_loss = 0
+      zs = jnp.zeros((self.horizon+1, self.batch_size, next_z.shape[-1]))
+      zs = zs.at[0].set(first_z)
+      for t in range(self.horizon):
         z = self.model.next(zs[t], actions[t], dynamics_params)
         zs = zs.at[t+1].set(z)
         consistency_loss += self.rho**t * \
             jnp.mean((z - next_z[t])**2, where=~finished[t][:, None])
         finished = finished.at[t+1].set(jnp.logical_or(finished[t], done[t]))
-        return (zs, finished, consistency_loss), None
-
-      zs = jnp.zeros((self.horizon+1, self.batch_size, next_z.shape[-1]))
-      zs = zs.at[0].set(first_z)
-      finished = jnp.zeros((self.horizon+1, self.batch_size), dtype=bool)
-      consistency_loss = 0
-      (zs, finished, consistency_loss), _ = jax.lax.scan(
-          f=latent_rollout,
-          init=(zs, finished, consistency_loss),
-          xs=jnp.arange(self.horizon)
-      )
 
       # Reward loss
       _, reward_logits = self.model.reward(zs[:-1], actions, reward_params)
@@ -280,12 +271,12 @@ class TDMPC2(struct.PyTreeNode):
               self.model.num_bins).mean(axis=-1, where=~finished[:-1]))
 
       # Value loss
-      _, q_logits = self.model.Q(zs[:-1], actions, value_params, key=Q_key)
+      _, Q_logits = self.model.Q(zs[:-1], actions, value_params, key=Q_key)
       td_targets = self.td_target(
           next_z, rewards, terminated, key=td_target_key)
       value_loss = jnp.sum(
           self.rho**np.arange(self.horizon) * soft_crossentropy(
-              q_logits, td_targets,
+              Q_logits, td_targets,
               self.model.symlog_min,
               self.model.symlog_max,
               self.model.num_bins).mean(axis=-1, where=~finished[:-1]))
@@ -298,6 +289,7 @@ class TDMPC2(struct.PyTreeNode):
             continue_logits, 1 - terminated).mean()
       else:
         continue_loss = 0.0
+
 
       consistency_loss = consistency_loss / self.horizon
       reward_loss = reward_loss / self.horizon
