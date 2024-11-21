@@ -49,6 +49,7 @@ def train(cfg: dict):
       env = gym.make(env_id)
       env = gym.wrappers.RescaleAction(env, min_action=-1, max_action=1)
       env = gym.wrappers.RecordEpisodeStatistics(env)
+      env = gym.wrappers.Autoreset(env)
       env.action_space.seed(seed)
       env.observation_space.seed(seed)
       return env
@@ -56,10 +57,12 @@ def train(cfg: dict):
     if env_config.backend == "gymnasium":
       return make_gym_env(env_config.env_id, seed)
     elif env_config.backend == "dmc":
-      _env = make_dmc_env(env_config.env_id, seed, env_config.dmc.obs_type)
-      env = gym.wrappers.RecordEpisodeStatistics(_env)
+      env = make_dmc_env(env_config.env_id, seed, env_config.dmc.obs_type)
+      env = gym.wrappers.RecordEpisodeStatistics(env)
+      env = gym.wrappers.Autoreset(env)
       return env
-    raise ValueError("Environment not supported:", env_config)
+    else:
+      raise ValueError("Environment not supported:", env_config)
 
   vector_env_cls = gym.vector.AsyncVectorEnv if env_config.asynchronous else gym.vector.SyncVectorEnv
   env = vector_env_cls(
@@ -120,7 +123,7 @@ def train(cfg: dict):
       ))
 
   model = WorldModel.create(
-      action_dim=np.prod(env.get_wrapper_attr('single_action_space').shape),
+      action_dim=np.prod(env.single_action_space.shape),
       encoder=encoder,
       **model_config,
       key=model_key)
@@ -180,6 +183,7 @@ def train(cfg: dict):
     seed_steps = int(max(5*T, 1000) * env_config.num_envs *
                      env_config.utd_ratio)
     pbar = tqdm.tqdm(initial=global_step, total=cfg.max_steps)
+    done = np.zeros(env_config.num_envs, dtype=bool)
     for global_step in range(global_step, cfg.max_steps, env_config.num_envs):
       if global_step <= seed_steps:
         action = env.action_space.sample()
@@ -192,18 +196,18 @@ def train(cfg: dict):
 
       next_observation, reward, terminated, truncated, info = env.step(action)
 
-      # Get real final observation and store transition
-      real_next_observation = next_observation.copy()
-      for ienv, trunc in enumerate(truncated):
-        if trunc:
-          real_next_observation[ienv] = info['final_observation'][ienv]
-      replay_buffer.insert(dict(
-          observation=observation,
-          action=action,
-          reward=reward,
-          next_observation=real_next_observation,
-          terminated=terminated,
-          truncated=truncated))
+      if np.any(~done):
+        replay_buffer.insert(
+            dict(
+                observation=observation,
+                action=action,
+                reward=reward,
+                next_observation=next_observation,
+                terminated=terminated,
+                truncated=truncated
+            ),
+            env_mask=~done
+        )
       observation = next_observation
 
       # Handle terminations/truncations
@@ -213,17 +217,15 @@ def train(cfg: dict):
             prev_plan[0].at[done].set(0),
             prev_plan[1].at[done].set(agent.max_plan_std)
         )
-      if "final_info" in info:
-        for ienv, final_info in enumerate(info["final_info"]):
-          if final_info is None:
-            continue
-          print(
-              f"Episode {ep_count[ienv]}: {final_info['episode']['r'][0]:.2f}, {final_info['episode']['l'][0]}")
-          writer.scalar(f'episode/return',
-                        final_info['episode']['r'], global_step + ienv)
-          writer.scalar(f'episode/length',
-                        final_info['episode']['l'], global_step + ienv)
-          ep_count[ienv] += 1
+        for ienv in range(env_config.num_envs):
+          if done[ienv]:
+            print(
+                f"Episode {ep_count[ienv]}: r = {info['episode']['r'][ienv]:.2f}, l = {info['episode']['l'][ienv]}")
+            writer.scalar(f'episode/return',
+                          info['episode']['r'][ienv], global_step + ienv)
+            writer.scalar(f'episode/length',
+                          info['episode']['l'][ienv], global_step + ienv)
+            ep_count[ienv] += 1
 
       if global_step >= seed_steps:
         if global_step == seed_steps:
