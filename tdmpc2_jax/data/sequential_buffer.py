@@ -3,6 +3,7 @@ import numpy as np
 from typing import *
 import jax
 from collections import deque
+from jaxtyping import PyTree
 
 
 class SequentialReplayBuffer():
@@ -34,37 +35,45 @@ class SequentialReplayBuffer():
     self.data = jax.tree.map(lambda x: np.zeros(
         (capacity,) + np.asarray(x).shape, np.asarray(x).dtype), dummy_input)
 
-    self.size = 0
-    self.current_ind = 0
+    # Size and index counter for each environment buffer
+    self.sizes = np.zeros(num_envs, dtype=int)
+    self.current_inds = np.zeros(num_envs, dtype=int)
 
-    self.np_random = np.random.RandomState(seed=seed)
+    self.np_random = np.random.default_rng(seed=seed)
 
-  def __len__(self):
-    return self.size
-
-  def insert(self, data: Dict) -> None:
-    # Insert the data
-    jax.tree.map(lambda x, y: x.__setitem__(self.current_ind, y),
-                 self.data, data)
-
-    self.current_ind = (self.current_ind + 1) % self.capacity
-    self.size = min(self.size + 1, self.capacity)
-  
-  def get_state(self) -> Dict:
-    return {
-      'current_ind': self.current_ind,
-      'size': self.size,
-      'data': self.data,
-    }
-  
-  def restore(self, state: Dict) -> None:
-    self.current_ind = state['current_ind']
-    self.size = state['size']
-    self.data = state['data']
-
-  def sample(self, batch_size: int, sequence_length: int) -> Dict:
+  def insert(self,
+             data: PyTree,
+             env_mask: Optional[np.ndarray] = None
+             ) -> None:
     """
-    Sample a batch uniformly across environments and time steps
+    Insert data into the buffer
+
+    Parameters
+    ----------
+    data : PyTree
+        Data to insert
+    env_mask : Optional[np.ndarray], optional
+        A boolean mask of size self.num_envs, which specifies which env buffers receive new data. If None, all envs receive data, by default None
+    """
+    # Insert data for the specified envs
+    if env_mask is None:
+      env_mask = np.ones(self.num_envs, dtype=bool)
+
+    def masked_set(x, y):
+      x[self.current_inds, env_mask] = y[env_mask]
+    jax.tree.map(masked_set, self.data, data)
+
+    # Update buffer state
+    self.current_inds[env_mask] = (
+        self.current_inds[env_mask] + 1
+    ) % self.capacity
+    self.sizes[env_mask] = np.clip(self.sizes[env_mask] + 1, 0, self.capacity)
+
+  def sample(self, batch_size: int, sequence_length: int) -> PyTree:
+    """
+    Sample a batch of sequences from the buffer.
+
+    Sequences are drawn uniformly from each environment buffer, and they may cross episode boundaries.
 
     Parameters
     ----------
@@ -73,41 +82,42 @@ class SequentialReplayBuffer():
 
     Returns
     -------
-    Dict
+    PyTree
+        A batch of sequences with shape (sequence_length, batch_size, *)
     """
-    env_inds = self.np_random.randint(0, self.num_envs, size=(batch_size, 1))
 
-    if self.size < self.capacity:
-      # This requires special handling to avoid sampling from the empty part of the buffer. Once the buffer is full, we can sample to our heart's content
-      buffer_starts = self.np_random.randint(
-          0, self.size - sequence_length - 1, size=(batch_size, 1))
-      sequence_inds = buffer_starts + np.arange(sequence_length)
-    else:
-      buffer_starts = self.np_random.randint(
-          0, self.size, size=(batch_size, 1))
-      sequence_inds = buffer_starts + np.arange(sequence_length)
-      sequence_inds = sequence_inds % self.capacity
+    # Sample envs and start indices
+    env_inds = self.np_random.integers(
+        low=0, high=self.num_envs,
+        size=batch_size
+    )
+    start_inds = self.np_random.integers(
+        low=0, high=self.sizes[env_inds] - sequence_length,
+        size=batch_size,
+        endpoint=True,
+    )
+    # Handle wrapping: For wrapped buffers, we define the current pointer index as 0 to avoid stepping into an unrelated trajectory
+    start_inds = (
+        start_inds - (self.sizes[env_inds] - self.current_inds[env_inds])
+    ) % self.capacity
 
     # Sample from buffer and convert from (batch, time, *) to (time, batch, *)
-    batch = jax.tree.map(lambda x: np.swapaxes(
-        x[sequence_inds, env_inds], 0, 1), self.data)
+    sequence_inds = start_inds[:, None] + np.arange(sequence_length)
+    batch = jax.tree.map(
+        lambda x: np.swapaxes(x[sequence_inds, env_inds[:, None]], 0, 1),
+        self.data
+    )
 
     return batch
 
+  def get_state(self) -> Dict:
+    return {
+        'current_inds': self.current_inds,
+        'sizes': self.sizes,
+        'data': self.data,
+    }
 
-if __name__ == '__main__':
-  # def make_env():
-  #   def thunk():
-  #     return gym.make('CartPole-v1')
-  env = gym.vector.SyncVectorEnv([lambda: gym.make('CartPole-v1')] * 2)
-  dummy_input = {'obs': env.observation_space.sample()}
-  rb = SequentialReplayBuffer(100, dummy_input, num_envs=2)
-
-  obs, _ = env.reset()
-  ep_count = np.zeros(env.num_envs, dtype=int)
-  for i in range(10):
-    action = env.action_space.sample()
-    obs, reward, term, trunc, _ = env.step(action)
-    rb.insert({'obs': obs})
-    if i > 3:
-      print(rb.sample(2, 3)['obs'].shape)
+  def restore(self, state: Dict) -> None:
+    self.current_inds = state['current_inds']
+    self.sizes = state['sizes']
+    self.data = state['data']

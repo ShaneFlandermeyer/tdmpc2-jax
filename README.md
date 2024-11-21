@@ -39,6 +39,3 @@ If you enjoy this project and would like to help improve it, feel free to put in
 While the core algorithm is fully implemented, the following features still need to be added:
 
 * Multi-task operation through task embeddings and replay buffer
-* General jax performance improvements
-    * jax.lax.scan instaead of for loops
-    * VMap parallel loss computations
