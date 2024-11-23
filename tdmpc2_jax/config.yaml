@@ -27,8 +27,8 @@ encoder:
 world_model:
   mlp_dim: 512
   latent_dim: 512
-  value_dropout: 0.01
-  num_value_nets: 5
+  value_dropout: 0
+  num_value_nets: 2
   num_bins: 101
   symlog_min: -10
   symlog_max: 10
@@ -38,7 +38,7 @@ world_model:
   predict_continues: False
   dtype: float32
   max_grad_norm: 20
-  tabulate: False
+  tabulate: True
 
 tdmpc2:
   # Planning

@@ -273,9 +273,18 @@ class TDMPC2(struct.PyTreeNode):
               self.model.num_bins).mean(axis=-1, where=~finished[:-1]))
 
       # Value loss
-      _, Q_logits = self.model.Q(zs[:-1], actions, value_params, key=Q_key)
+      # TODO: Use Cross-Q update rule and apply batch stats update
+      _, Q_logits, Q_updates = self.model.Q(
+          z=zs[:-1],
+          a=actions,
+          params=value_params,
+          batch_stats=self.model.value_model.batch_stats,
+          key=Q_key,
+          train=True
+      )
       td_targets = self.td_target(
           next_z, rewards, terminated, key=td_target_key)
+
       value_loss = jnp.sum(
           self.rho**np.arange(self.horizon) * soft_crossentropy(
               Q_logits, td_targets,
@@ -346,7 +355,13 @@ class TDMPC2(struct.PyTreeNode):
           zs, params, key=action_key)
 
       # Compute Q-values
-      Qs, _ = self.model.Q(zs, actions, new_value_model.params, key=Q_key)
+      Qs, _ = self.model.Q(
+          z=zs,
+          a=actions,
+          params=new_value_model.params,
+          key=Q_key,
+          train=False
+      )
       Q = Qs.mean(axis=0)
       # Update and apply scale
       scale = percentile_normalization(Q[0], self.scale).clip(1, None)

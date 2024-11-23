@@ -129,7 +129,7 @@ def train(cfg: dict):
       key=model_key)
   if model.action_dim >= 20:
     tdmpc_config.mppi_iterations += 2
-
+    
   agent = TDMPC2.create(world_model=model, **tdmpc_config)
   global_step = 0
 

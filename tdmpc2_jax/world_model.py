@@ -14,6 +14,8 @@ import jax.numpy as jnp
 import optax
 from tdmpc2_jax.networks import Ensemble
 from tdmpc2_jax.common.util import symlog, two_hot_inv
+from tdmpc2_jax.networks.crossq import CrossQCritic, BatchNormTrainState
+import flax
 
 
 class WorldModel(struct.PyTreeNode):
@@ -23,7 +25,6 @@ class WorldModel(struct.PyTreeNode):
   reward_model: TrainState
   policy_model: TrainState
   value_model: TrainState
-  target_value_model: TrainState
   continue_model: TrainState
   # Spaces
   action_dim: int = struct.field(pytree_node=False)
@@ -104,7 +105,8 @@ class WorldModel(struct.PyTreeNode):
         NormedLinear(mlp_dim, activation=mish, dtype=dtype),
         NormedLinear(mlp_dim, activation=mish, dtype=dtype),
         nn.Dense(2*action_dim,
-                 kernel_init=nn.initializers.truncated_normal(0.02))
+                 kernel_init=nn.initializers.truncated_normal(0.02)
+                 )
     ])
     policy_model = TrainState.create(
         apply_fn=policy_module.apply,
@@ -113,30 +115,39 @@ class WorldModel(struct.PyTreeNode):
             optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(learning_rate, eps=1e-5),
-        ))
+        )
+    )
 
     # Return/value model (ensemble)
-    value_param_key, value_dropout_key = jax.random.split(value_key)
-    value_base = partial(nn.Sequential, [
-        NormedLinear(mlp_dim, activation=mish,
-                     dropout_rate=value_dropout, dtype=dtype),
-        NormedLinear(mlp_dim, activation=mish, dtype=dtype),
-        nn.Dense(num_bins, kernel_init=nn.initializers.zeros)])
+    value_param_key, value_dropout_key, value_bn_key = jax.random.split(
+        value_key, 3)
+    # CrossQ
+    value_base = partial(
+        CrossQCritic,
+        mlp_dim=latent_dim,
+        num_layers=num_value_nets,
+        activation=mish,
+        dropout_rate=value_dropout,
+        kernel_init=nn.initializers.truncated_normal(0.02)
+    )
     value_ensemble = Ensemble(value_base, num=num_value_nets)
-    value_model = TrainState.create(
+    value_params = value_ensemble.init(
+        {
+            'params': value_param_key,
+            'dropout': value_dropout_key,
+            'batch_stats': value_bn_key
+        },
+        jnp.zeros(latent_dim + action_dim))
+    value_model = BatchNormTrainState.create(
         apply_fn=value_ensemble.apply,
-        params=value_ensemble.init(
-            {'params': value_param_key, 'dropout': value_dropout_key},
-            jnp.zeros(latent_dim + action_dim))['params'],
+        params=value_params['params'],
+        batch_stats=value_params['batch_stats'],
         tx=optax.chain(
             optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(learning_rate),
-        ))
-    target_value_model = TrainState.create(
-        apply_fn=value_ensemble.apply,
-        params=copy.deepcopy(value_model.params),
-        tx=optax.GradientTransformation(lambda _: None, lambda _: None))
+        )
+    )
 
     if predict_continues:
       continue_module = nn.Sequential([
@@ -194,7 +205,6 @@ class WorldModel(struct.PyTreeNode):
         reward_model=reward_model,
         policy_model=policy_model,
         value_model=value_model,
-        target_value_model=target_value_model,
         continue_model=continue_model,
         # Architecture
         mlp_dim=mlp_dim,
@@ -255,12 +265,22 @@ class WorldModel(struct.PyTreeNode):
 
     return action, mean, log_std, log_probs
 
-  @jax.jit
-  def Q(self, z: jax.Array, a: jax.Array, params: Dict, key: PRNGKeyArray
+  @partial(jax.jit, static_argnames=('train',))
+  def Q(self,
+        z: jax.Array,
+        a: jax.Array,
+        params: flax.core.FrozenDict,
+        batch_stats: flax.core.FrozenDict,
+        key: PRNGKeyArray,
+        train: bool = True,
         ) -> Tuple[jax.Array, jax.Array]:
-    z = jnp.concatenate([z, a], axis=-1)
-    logits = self.value_model.apply_fn(
-        {'params': params}, z, rngs={'dropout': key})
+    logits, state_updates = self.value_model.apply_fn(
+        {'params': params, "batch_stats": batch_stats},
+        jnp.concatenate([z, a], axis=-1),
+        train,
+        rngs={'dropout': key},
+        mutable=['batch_stats'],
+    )
 
     Q = two_hot_inv(logits, self.symlog_min, self.symlog_max, self.num_bins)
-    return Q, logits
+    return Q, logits, state_updates
