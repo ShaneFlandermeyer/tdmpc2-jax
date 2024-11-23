@@ -38,7 +38,7 @@ world_model:
   predict_continues: False
   dtype: float32
   max_grad_norm: 20
-  tabulate: True
+  tabulate: False
 
 tdmpc2:
   # Planning

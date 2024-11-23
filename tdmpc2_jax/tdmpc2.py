@@ -272,19 +272,24 @@ class TDMPC2(struct.PyTreeNode):
               self.model.symlog_max,
               self.model.num_bins).mean(axis=-1, where=~finished[:-1]))
 
-      # Value loss
-      # TODO: Use Cross-Q update rule and apply batch stats update
-      _, Q_logits, Q_updates = self.model.Q(
-          z=zs[:-1],
-          a=actions,
+      # Value loss (CrossQ update rule)
+      action_key, Q_key = jax.random.split(Q_key, 2)
+      next_action = self.model.sample_actions(
+          next_z, self.model.policy_model.params, key=action_key
+      )[0]
+
+      all_Q, all_Q_logits, Q_updates = self.model.Q(
+          z=jnp.concatenate([zs[:-1], next_z]),
+          a=jnp.concatenate([actions, next_action]),
           params=value_params,
           batch_stats=self.model.value_model.batch_stats,
           key=Q_key,
           train=True
       )
-      td_targets = self.td_target(
-          next_z, rewards, terminated, key=td_target_key)
-
+      Q_logits, _ = jnp.split(all_Q_logits, 2, axis=1)
+      _, next_Q = jnp.split(all_Q, 2, axis=1)
+      next_Q = next_Q.min(axis=0)
+      td_targets = sg(rewards + (1 - terminated) * self.discount * next_Q)
       value_loss = jnp.sum(
           self.rho**np.arange(self.horizon) * soft_crossentropy(
               Q_logits, td_targets,
@@ -317,7 +322,8 @@ class TDMPC2(struct.PyTreeNode):
           'value_loss': value_loss,
           'continue_loss': continue_loss,
           'total_loss': total_loss,
-          'zs': zs
+          'zs': zs,
+          'batch_stats': Q_updates['batch_stats']
       }
 
     # Update world model
@@ -329,22 +335,23 @@ class TDMPC2(struct.PyTreeNode):
             self.model.reward_model.params,
             self.model.continue_model.params if self.model.predict_continues else None)
     zs = model_info.pop('zs')
+    batch_stats = model_info.pop('batch_stats')
 
     new_encoder = self.model.encoder.apply_gradients(grads=encoder_grads)
     new_dynamics_model = self.model.dynamics_model.apply_gradients(
-        grads=dynamics_grads)
+        grads=dynamics_grads
+    )
     new_reward_model = self.model.reward_model.apply_gradients(
-        grads=reward_grads)
+        grads=reward_grads
+    )
     new_value_model = self.model.value_model.apply_gradients(
-        grads=value_grads)
-    new_target_value_model = self.model.target_value_model.replace(
-        params=optax.incremental_update(
-            new_value_model.params,
-            self.model.target_value_model.params,
-            self.tau))
+        grads=value_grads
+    )
+    new_value_model = new_value_model.replace(batch_stats=batch_stats)
     if self.model.predict_continues:
       new_continue_model = self.model.continue_model.apply_gradients(
-          grads=continue_grads)
+          grads=continue_grads
+      )
     else:
       new_continue_model = self.model.continue_model
 
@@ -355,14 +362,15 @@ class TDMPC2(struct.PyTreeNode):
           zs, params, key=action_key)
 
       # Compute Q-values
-      Qs, _ = self.model.Q(
+      Qs, _, _ = self.model.Q(
           z=zs,
           a=actions,
           params=new_value_model.params,
+          batch_stats=new_value_model.batch_stats,
           key=Q_key,
           train=False
       )
-      Q = Qs.mean(axis=0)
+      Q = Qs.min(axis=0)
       # Update and apply scale
       scale = percentile_normalization(Q[0], self.scale).clip(1, None)
       Q = Q / sg(scale)
@@ -377,15 +385,17 @@ class TDMPC2(struct.PyTreeNode):
     new_policy = self.model.policy_model.apply_gradients(grads=policy_grads)
 
     # Update model
-    new_agent = self.replace(model=self.model.replace(
-        encoder=new_encoder,
-        dynamics_model=new_dynamics_model,
-        reward_model=new_reward_model,
-        value_model=new_value_model,
-        policy_model=new_policy,
-        target_value_model=new_target_value_model,
-        continue_model=new_continue_model),
-        scale=policy_info['policy_scale'])
+    new_agent = self.replace(
+        model=self.model.replace(
+            encoder=new_encoder,
+            dynamics_model=new_dynamics_model,
+            reward_model=new_reward_model,
+            value_model=new_value_model,
+            policy_model=new_policy,
+            continue_model=new_continue_model
+        ),
+        scale=policy_info['policy_scale']
+    )
     info = {**model_info, **policy_info}
 
     return new_agent, info
@@ -400,8 +410,11 @@ class TDMPC2(struct.PyTreeNode):
       G += discount * reward
 
       if self.model.predict_continues:
-        continues = jax.nn.sigmoid(self.model.continue_model.apply_fn(
-            {'params': self.model.continue_model.params}, z)).squeeze(-1) > 0.5
+        continues = jax.nn.sigmoid(
+            self.model.continue_model.apply_fn(
+                {'params': self.model.continue_model.params}, z
+            )
+        ).squeeze(-1) > 0.5
       else:
         continues = 1.0
 
@@ -411,23 +424,13 @@ class TDMPC2(struct.PyTreeNode):
     next_action = self.model.sample_actions(
         z, self.model.policy_model.params, key=action_key)[0]
 
-    Qs, _ = self.model.Q(
-        z, next_action, self.model.value_model.params, key=Q_key)
-    Q = Qs.mean(axis=0)
+    Qs, _, _ = self.model.Q(
+        z=z,
+        a=next_action,
+        params=self.model.value_model.params,
+        batch_stats=self.model.value_model.batch_stats,
+        train=False,
+        key=Q_key
+    )
+    Q = Qs.min(axis=0)
     return sg(G + discount * Q)
-
-  @jax.jit
-  def td_target(self, next_z: jax.Array, reward: jax.Array, terminal: jax.Array,
-                key: PRNGKeyArray) -> jax.Array:
-    action_key, ensemble_key, Q_key = jax.random.split(key, 3)
-    next_action = self.model.sample_actions(
-        next_z, self.model.policy_model.params, key=action_key)[0]
-
-    # Sample two Q-values from the target ensemble
-    inds = jax.random.choice(ensemble_key,
-                             jnp.arange(0, self.model.num_value_nets),
-                             shape=(2, ), replace=False)
-    Qs, _ = self.model.Q(
-        next_z, next_action, self.model.target_value_model.params, key=Q_key)
-    Q = Qs[inds].min(axis=0)
-    return sg(reward + (1 - terminal) * self.discount * Q)

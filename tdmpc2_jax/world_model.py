@@ -218,18 +218,29 @@ class WorldModel(struct.PyTreeNode):
     )
 
   @jax.jit
-  def encode(self, obs: np.ndarray, params: Dict, key: PRNGKeyArray) -> jax.Array:
+  def encode(self,
+             obs: np.ndarray,
+             params: flax.core.FrozenDict,
+             key: PRNGKeyArray
+             ) -> jax.Array:
     if self.symlog_obs:
       obs = jax.tree.map(lambda x: symlog(x), obs)
     return self.encoder.apply_fn({'params': params}, obs, rngs={'dropout': key})
 
   @jax.jit
-  def next(self, z: jax.Array, a: jax.Array, params: Dict) -> jax.Array:
+  def next(self,
+           z: jax.Array,
+           a: jax.Array,
+           params: flax.core.FrozenDict
+           ) -> jax.Array:
     z = jnp.concatenate([z, a], axis=-1)
     return self.dynamics_model.apply_fn({'params': params}, z)
 
   @jax.jit
-  def reward(self, z: jax.Array, a: jax.Array, params: Dict
+  def reward(self,
+             z: jax.Array,
+             a: jax.Array,
+             params: flax.core.FrozenDict
              ) -> Tuple[jax.Array, jax.Array]:
     z = jnp.concatenate([z, a], axis=-1)
     logits = self.reward_model.apply_fn({'params': params}, z)
@@ -240,7 +251,7 @@ class WorldModel(struct.PyTreeNode):
   @jax.jit
   def sample_actions(self,
                      z: jax.Array,
-                     params: Dict,
+                     params: flax.core.FrozenDict,
                      min_log_std: float = -10,
                      max_log_std: float = 2,
                      *,
