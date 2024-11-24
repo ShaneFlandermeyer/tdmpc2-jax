@@ -25,7 +25,6 @@ encoder:
   tabulate: False
 
 world_model:
-  mlp_dim: 512
   latent_dim: 512
   value_dropout: 0.01
   num_value_nets: 5
