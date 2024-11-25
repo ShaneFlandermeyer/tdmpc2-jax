@@ -28,7 +28,6 @@ class WorldModel(struct.PyTreeNode):
   # Spaces
   action_dim: int = struct.field(pytree_node=False)
   # Architecture
-  mlp_dim: int = struct.field(pytree_node=False)
   latent_dim: int = struct.field(pytree_node=False)
   num_value_nets: int = struct.field(pytree_node=False)
   num_bins: int = struct.field(pytree_node=False)
@@ -41,10 +40,9 @@ class WorldModel(struct.PyTreeNode):
   def create(cls,
              # Spaces
              action_dim: int,
-             # Models
+             # Encoder module
              encoder: TrainState,
-             # Architecture
-             mlp_dim: int,
+             # World model
              latent_dim: int,
              value_dropout: float,
              num_value_nets: int,
@@ -58,6 +56,7 @@ class WorldModel(struct.PyTreeNode):
              learning_rate: float,
              max_grad_norm: float = 20,
              # Misc
+
              tabulate: bool = False,
              dtype: jnp.dtype = jnp.float32,
              *,
@@ -68,8 +67,8 @@ class WorldModel(struct.PyTreeNode):
 
     # Latent forward dynamics model
     dynamics_module = nn.Sequential([
-        NormedLinear(mlp_dim, activation=mish, dtype=dtype),
-        NormedLinear(mlp_dim, activation=mish, dtype=dtype),
+        NormedLinear(latent_dim, activation=mish, dtype=dtype),
+        NormedLinear(latent_dim, activation=mish, dtype=dtype),
         NormedLinear(latent_dim, activation=partial(
             simnorm, simplex_dim=simnorm_dim), dtype=dtype)
     ])
@@ -81,12 +80,13 @@ class WorldModel(struct.PyTreeNode):
             optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(learning_rate),
-        ))
+        )
+    )
 
     # Transition reward model
     reward_module = nn.Sequential([
-        NormedLinear(mlp_dim, activation=mish, dtype=dtype),
-        NormedLinear(mlp_dim, activation=mish, dtype=dtype),
+        NormedLinear(latent_dim, activation=mish, dtype=dtype),
+        NormedLinear(latent_dim, activation=mish, dtype=dtype),
         nn.Dense(num_bins, kernel_init=nn.initializers.zeros)
     ])
     reward_model = TrainState.create(
@@ -97,12 +97,13 @@ class WorldModel(struct.PyTreeNode):
             optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(learning_rate),
-        ))
+        )
+    )
 
     # Policy model
     policy_module = nn.Sequential([
-        NormedLinear(mlp_dim, activation=mish, dtype=dtype),
-        NormedLinear(mlp_dim, activation=mish, dtype=dtype),
+        NormedLinear(latent_dim, activation=mish, dtype=dtype),
+        NormedLinear(latent_dim, activation=mish, dtype=dtype),
         nn.Dense(2*action_dim,
                  kernel_init=nn.initializers.truncated_normal(0.02))
     ])
@@ -113,15 +114,17 @@ class WorldModel(struct.PyTreeNode):
             optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(learning_rate, eps=1e-5),
-        ))
+        )
+    )
 
     # Return/value model (ensemble)
     value_param_key, value_dropout_key = jax.random.split(value_key)
     value_base = partial(nn.Sequential, [
-        NormedLinear(mlp_dim, activation=mish,
+        NormedLinear(latent_dim, activation=mish,
                      dropout_rate=value_dropout, dtype=dtype),
-        NormedLinear(mlp_dim, activation=mish, dtype=dtype),
-        nn.Dense(num_bins, kernel_init=nn.initializers.zeros)])
+        NormedLinear(latent_dim, activation=mish, dtype=dtype),
+        nn.Dense(num_bins, kernel_init=nn.initializers.zeros)
+    ])
     value_ensemble = Ensemble(value_base, num=num_value_nets)
     value_model = TrainState.create(
         apply_fn=value_ensemble.apply,
@@ -132,7 +135,8 @@ class WorldModel(struct.PyTreeNode):
             optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
             optax.adam(learning_rate),
-        ))
+        )
+    )
     target_value_model = TrainState.create(
         apply_fn=value_ensemble.apply,
         params=copy.deepcopy(value_model.params),
@@ -140,8 +144,8 @@ class WorldModel(struct.PyTreeNode):
 
     if predict_continues:
       continue_module = nn.Sequential([
-          NormedLinear(mlp_dim, activation=mish, dtype=dtype),
-          NormedLinear(mlp_dim, activation=mish, dtype=dtype),
+          NormedLinear(latent_dim, activation=mish, dtype=dtype),
+          NormedLinear(latent_dim, activation=mish, dtype=dtype),
           nn.Dense(1, kernel_init=nn.initializers.zeros)
       ])
       continue_model = TrainState.create(
@@ -152,38 +156,59 @@ class WorldModel(struct.PyTreeNode):
               optax.zero_nans(),
               optax.clip_by_global_norm(max_grad_norm),
               optax.adam(learning_rate),
-          ))
+          )
+      )
     else:
       continue_model = None
 
     if tabulate:
       print("Dynamics Model")
       print("--------------")
-      print(dynamics_module.tabulate(jax.random.key(0), jnp.ones(
-          latent_dim + action_dim), compute_flops=True))
+      print(
+          dynamics_module.tabulate(
+              jax.random.key(0),
+              jnp.ones(latent_dim + action_dim),
+              compute_flops=True
+          )
+      )
 
       print("Reward Model")
       print("------------")
-      print(reward_module.tabulate(jax.random.key(0), jnp.ones(
-          latent_dim + action_dim), compute_flops=True))
+      print(
+          reward_module.tabulate(
+              jax.random.key(0),
+              jnp.ones(latent_dim + action_dim),
+              compute_flops=True
+          )
+      )
 
       print("Policy Model")
       print("------------")
-      print(policy_module.tabulate(jax.random.key(0), jnp.ones(
-          latent_dim), compute_flops=True))
+      print(
+          policy_module.tabulate(
+              jax.random.key(0), jnp.ones(latent_dim), compute_flops=True
+          )
+      )
 
       print("Value Model")
       print("-----------")
       value_param_key, value_dropout_key = jax.random.split(value_key)
-      print(value_ensemble.tabulate(
-          {'params': value_param_key, 'dropout': value_dropout_key},
-          jnp.ones(latent_dim + action_dim), compute_flops=True))
+      print(
+          value_ensemble.tabulate(
+              {'params': value_param_key, 'dropout': value_dropout_key},
+              jnp.ones(latent_dim + action_dim),
+              compute_flops=True
+          )
+      )
 
       if predict_continues:
         print("Continue Model")
         print("--------------")
-        print(continue_module.tabulate(jax.random.key(0), jnp.ones(
-            latent_dim), compute_flops=True))
+        print(
+            continue_module.tabulate(
+                jax.random.key(0), jnp.ones(latent_dim), compute_flops=True
+            )
+        )
 
     return cls(
         # Spaces
@@ -197,7 +222,6 @@ class WorldModel(struct.PyTreeNode):
         target_value_model=target_value_model,
         continue_model=continue_model,
         # Architecture
-        mlp_dim=mlp_dim,
         latent_dim=latent_dim,
         num_value_nets=num_value_nets,
         num_bins=num_bins,
@@ -223,8 +247,9 @@ class WorldModel(struct.PyTreeNode):
              ) -> Tuple[jax.Array, jax.Array]:
     z = jnp.concatenate([z, a], axis=-1)
     logits = self.reward_model.apply_fn({'params': params}, z)
-    reward = two_hot_inv(logits, self.symlog_min,
-                         self.symlog_max, self.num_bins)
+    reward = two_hot_inv(
+        logits, self.symlog_min, self.symlog_max, self.num_bins
+    )
     return reward, logits
 
   @jax.jit
@@ -237,8 +262,9 @@ class WorldModel(struct.PyTreeNode):
                      key: PRNGKeyArray
                      ) -> Tuple[jax.Array, ...]:
     # Chunk the policy model output to get mean and logstd
-    mu, log_std = jnp.split(self.policy_model.apply_fn(
-        {'params': params}, z), 2, axis=-1)
+    mu, log_std = jnp.split(
+        self.policy_model.apply_fn({'params': params}, z), 2, axis=-1
+    )
     log_std = min_log_std + 0.5 * \
         (max_log_std - min_log_std) * (jnp.tanh(log_std) + 1)
 
@@ -260,7 +286,8 @@ class WorldModel(struct.PyTreeNode):
         ) -> Tuple[jax.Array, jax.Array]:
     z = jnp.concatenate([z, a], axis=-1)
     logits = self.value_model.apply_fn(
-        {'params': params}, z, rngs={'dropout': key})
+        {'params': params}, z, rngs={'dropout': key}
+    )
 
     Q = two_hot_inv(logits, self.symlog_min, self.symlog_max, self.num_bins)
     return Q, logits
