@@ -302,13 +302,15 @@ class TDMPC2(struct.PyTreeNode):
       # Value loss
       ###########################################################
       next_action_key, ensemble_key, Q_key = jax.random.split(value_key, 3)
-      _, Q_logits = self.model.Q(zs[:-1], actions, value_params, key=Q_key)
+
+      # TD targets
       next_action = self.model.sample_actions(
           next_z, self.model.policy_model.params, key=next_action_key
       )[0]
       Qs, _ = self.model.Q(
-          next_z, next_action, self.model.target_value_model.params, key=Q_key)
-      # Sample two networks for the TD targets
+          next_z, next_action, self.model.target_value_model.params, key=Q_key
+      )
+      # Subsample value networks
       inds = jax.random.choice(
           ensemble_key,
           jnp.arange(0, self.model.num_value_nets),
@@ -317,6 +319,8 @@ class TDMPC2(struct.PyTreeNode):
       )
       Q = Qs[inds].min(axis=0)
       td_targets = rewards + (1 - terminated) * self.discount * Q
+
+      _, Q_logits = self.model.Q(zs[:-1], actions, value_params, key=Q_key)
       value_loss = jnp.sum(
           self.rho**np.arange(self.horizon) * soft_crossentropy(
               Q_logits, sg(td_targets),
