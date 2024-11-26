@@ -306,20 +306,20 @@ class TDMPC2(struct.PyTreeNode):
       next_action = self.model.sample_actions(
           next_z, self.model.policy_model.params, key=next_action_key
       )[0]
-      # Sample two Q-values from the target ensemble
+      Qs, _ = self.model.Q(
+          next_z, next_action, self.model.target_value_model.params, key=Q_key)
+      # Sample two networks for the TD targets
       inds = jax.random.choice(
           ensemble_key,
           jnp.arange(0, self.model.num_value_nets),
           shape=(2, ),
           replace=False
       )
-      Qs, _ = self.model.Q(
-          next_z, next_action, self.model.target_value_model.params, key=Q_key)
-      Q = Qs[inds].mean(axis=0)
-      td_targets = sg(rewards + (1 - terminated) * self.discount * Q)
+      Q = Qs[inds].min(axis=0)
+      td_targets = rewards + (1 - terminated) * self.discount * Q
       value_loss = jnp.sum(
           self.rho**np.arange(self.horizon) * soft_crossentropy(
-              Q_logits, td_targets,
+              Q_logits, sg(td_targets),
               self.model.symlog_min,
               self.model.symlog_max,
               self.model.num_bins
@@ -407,11 +407,12 @@ class TDMPC2(struct.PyTreeNode):
       Q = Q / sg(scale)
 
       # Compute policy objective (equation 4)
-      rho = self.rho ** jnp.arange(self.horizon+1)
       policy_loss = (
-          (self.entropy_coef * log_probs - Q).mean(axis=1) * rho
+          self.rho ** jnp.arange(self.horizon+1) *
+          (self.entropy_coef * log_probs - Q).mean(axis=1)
       ).mean()
       return policy_loss, {'policy_loss': policy_loss, 'policy_scale': scale}
+
     policy_grads, policy_info = jax.grad(policy_loss_fn, has_aux=True)(
         self.model.policy_model.params
     )
