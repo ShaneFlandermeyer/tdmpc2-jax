@@ -267,17 +267,18 @@ class WorldModel(struct.PyTreeNode):
     )
     log_std = min_log_std + 0.5 * \
         (max_log_std - min_log_std) * (jnp.tanh(log_std) + 1)
+    std = jnp.exp(log_std)
 
     # Sample action and compute logprobs
     eps = jax.random.normal(key, mu.shape)
-    x_t = mu + eps * jnp.exp(log_std)
-    residual = (-0.5 * eps**2 - log_std).sum(-1)
-    log_probs = x_t.shape[-1] * (residual - 0.5 * jnp.log(2 * jnp.pi))
+    x_t = mu + eps * std
+    log_probs = jax.scipy.stats.norm.logpdf(x_t, loc=mu, scale=std)
 
     # Squash tanh
     mean = jnp.tanh(mu)
     action = jnp.tanh(x_t)
-    log_probs -= jnp.log(nn.relu(1 - action**2) + 1e-6).sum(-1)
+    log_probs -= jnp.log(1 - action**2 + 1e-6)
+    log_probs = jnp.sum(log_probs, axis=-1)
 
     return action, mean, log_std, log_probs
 

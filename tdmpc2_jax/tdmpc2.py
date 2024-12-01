@@ -415,7 +415,11 @@ class TDMPC2(struct.PyTreeNode):
           self.rho ** jnp.arange(self.horizon+1) *
           (self.entropy_coef * log_probs - Q).mean(axis=1)
       ).mean()
-      return policy_loss, {'policy_loss': policy_loss, 'policy_scale': scale}
+      return policy_loss, {
+          'policy_loss': policy_loss,
+          'policy_scale': scale,
+          'entropy': -log_probs.mean()
+      }
 
     policy_grads, policy_info = jax.grad(policy_loss_fn, has_aux=True)(
         self.model.policy_model.params
