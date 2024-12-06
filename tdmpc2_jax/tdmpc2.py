@@ -210,8 +210,9 @@ class TDMPC2(struct.PyTreeNode):
       elite_values, elite_actions = value[elite_inds], actions[:, elite_inds]
 
       # Update population distribution
-      score = jnp.exp(self.temperature * (elite_values - elite_values.max()))
-      score /= score.sum(axis=0) + jnp.finfo(score.dtype).eps
+    #   score = jnp.exp(self.temperature * (elite_values - elite_values.max()))
+    #   score /= score.sum(axis=0) + jnp.finfo(score.dtype).eps
+      score = jax.nn.softmax(elite_values)
       mean = jnp.sum(score[None, :, None] * elite_actions, axis=1)
       std = jnp.sqrt(
           jnp.sum(

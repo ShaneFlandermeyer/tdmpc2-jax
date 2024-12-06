@@ -60,6 +60,8 @@ def train(cfg: dict):
       env = make_dmc_env(env_config.env_id, seed, env_config.dmc.obs_type)
       env = gym.wrappers.RecordEpisodeStatistics(env)
       env = gym.wrappers.Autoreset(env)
+      env.action_space.seed(seed)
+      env.observation_space.seed(seed)
       return env
     else:
       raise ValueError("Environment not supported:", env_config)
