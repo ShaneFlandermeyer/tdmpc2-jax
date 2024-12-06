@@ -5,15 +5,15 @@ hydra:
     dir: outputs/${hydra.job.name}/${now:%Y-%m-%d_%H-%M-%S}
 
 seed: 0
-max_steps: 1_000_000
+max_steps: 2_000_000
 save_interval_steps: 100000
 log_interval_steps: 10000
 
 env:
-  backend: gymnasium
-  env_id: HalfCheetah-v4
+  backend: dmc
+  env_id: dog-run
   num_envs: 4
-  utd_ratio: 0.5
+  utd_ratio: 1.0
   asynchronous: True
 
   dmc: { obs_type: state }
@@ -49,7 +49,6 @@ tdmpc2:
   num_elites: 64
   min_plan_std: 0.05
   max_plan_std: 2
-  temperature: 0.5
   # Optimization
   batch_size: 256
   discount: 0.99

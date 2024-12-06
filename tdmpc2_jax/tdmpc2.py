@@ -28,7 +28,6 @@ class TDMPC2(struct.PyTreeNode):
   num_elites: int = struct.field(pytree_node=False)
   min_plan_std: float
   max_plan_std: float
-  temperature: float
 
   # Optimization
   batch_size: int = struct.field(pytree_node=False)
@@ -53,7 +52,6 @@ class TDMPC2(struct.PyTreeNode):
              num_elites: int,
              min_plan_std: float,
              max_plan_std: float,
-             temperature: float,
              # Optimization
              discount: float,
              batch_size: int,
@@ -75,7 +73,6 @@ class TDMPC2(struct.PyTreeNode):
                num_elites=num_elites,
                min_plan_std=min_plan_std,
                max_plan_std=max_plan_std,
-               temperature=temperature,
                discount=discount,
                batch_size=batch_size,
                rho=rho,
