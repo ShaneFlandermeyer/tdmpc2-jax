@@ -21,7 +21,7 @@ env:
 encoder:
   encoder_dim: 256
   num_encoder_layers: 2
-  learning_rate: 1e-4
+  learning_rate: 3e-4
   tabulate: False
 
 world_model:
