@@ -113,7 +113,7 @@ class WorldModel(struct.PyTreeNode):
         tx=optax.chain(
             optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
-            optax.adam(learning_rate, eps=1e-5),
+            optax.adam(learning_rate),
         )
     )
 
@@ -262,7 +262,7 @@ class WorldModel(struct.PyTreeNode):
                      key: PRNGKeyArray
                      ) -> Tuple[jax.Array, ...]:
     # Chunk the policy model output to get mean and logstd
-    mu, log_std = jnp.split(
+    mean, log_std = jnp.split(
         self.policy_model.apply_fn({'params': params}, z), 2, axis=-1
     )
     log_std = min_log_std + 0.5 * \
@@ -270,15 +270,15 @@ class WorldModel(struct.PyTreeNode):
     std = jnp.exp(log_std)
 
     # Sample action and compute logprobs
-    eps = jax.random.normal(key, mu.shape)
-    x_t = mu + eps * std
-    log_probs = jax.scipy.stats.norm.logpdf(x_t, loc=mu, scale=std)
+    eps = jax.random.normal(key, mean.shape)
+    action = mean + eps * jnp.exp(log_std)
+    residual = (-0.5 * eps**2 - log_std).sum(-1)
+    log_probs = action.shape[-1] * (residual - 0.5 * jnp.log(2 * jnp.pi))
 
     # Squash tanh
-    mean = jnp.tanh(mu)
-    action = jnp.tanh(x_t)
-    log_probs -= jnp.log(1 - action**2 + 1e-6)
-    log_probs = jnp.sum(log_probs, axis=-1)
+    mean = jnp.tanh(mean)
+    action = jnp.tanh(action)
+    log_probs -= jnp.log(nn.relu(1 - action**2) + 1e-6).sum(-1)
 
     return action, mean, log_std, log_probs
 
