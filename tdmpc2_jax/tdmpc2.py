@@ -99,9 +99,9 @@ class TDMPC2(struct.PyTreeNode):
       if prev_plan is None:
         batch_dims = z.shape[:-1]
         prev_plan = (
-            jnp.zeros((*batch_dims, self.horizon, self.model.action_dim)),
+            jnp.zeros((*batch_dims, self.horizon+1, self.model.action_dim)),
             jnp.full(
-                (*batch_dims, self.horizon, self.model.action_dim),
+                (*batch_dims, self.horizon+1, self.model.action_dim),
                 self.max_plan_std
             )
         )
@@ -132,7 +132,7 @@ class TDMPC2(struct.PyTreeNode):
         (
             *batch_shape,
             self.population_size,
-            self.horizon,
+            self.horizon+1,
             self.model.action_dim
         )
     )
@@ -141,23 +141,23 @@ class TDMPC2(struct.PyTreeNode):
     # Policy prior samples
     ###########################################################
     if self.policy_prior_samples > 0:
-      key, *prior_noise_keys = jax.random.split(key, 1+self.horizon)
+      key, *prior_noise_keys = jax.random.split(key, 1+(self.horizon+1))
       policy_actions = jnp.zeros(
           (
               *batch_shape,
               self.policy_prior_samples,
-              self.horizon,
+              self.horizon+1,
               self.model.action_dim
           )
       )
       z_t = z[..., None, :].repeat(self.policy_prior_samples, axis=-2)
-      for t in range(self.horizon):
+      for t in range(self.horizon+1):
         policy_actions = policy_actions.at[..., t, :].set(
             self.model.sample_actions(
                 z_t, self.model.policy_model.params, key=prior_noise_keys[t]
             )[0]
         )
-        if t < self.horizon - 1:  # Don't need for the last time step
+        if t < self.horizon:  # Don't need for the last time step
           z_t = self.model.next(
               z_t,
               policy_actions[..., t, :],
@@ -180,7 +180,7 @@ class TDMPC2(struct.PyTreeNode):
         shape=(
             *batch_shape,
             self.population_size - self.policy_prior_samples,
-            self.horizon,
+            self.horizon+1,
             self.model.action_dim
         )
     )
@@ -190,14 +190,14 @@ class TDMPC2(struct.PyTreeNode):
             *batch_shape,
             self.population_size - self.num_elites,
             self.mppi_iterations,
-            self.horizon,
+            self.horizon+1,
             self.model.action_dim
         )
     )
     # Initialize population state
-    mean = jnp.zeros((*batch_shape, self.horizon, self.model.action_dim))
+    mean = jnp.zeros((*batch_shape, self.horizon+1, self.model.action_dim))
     std = jnp.full(
-        (*batch_shape, self.horizon, self.model.action_dim),
+        (*batch_shape, self.horizon+1, self.model.action_dim),
         self.max_plan_std
     )
     mean = mean.at[..., :-1, :].set(prev_plan[0][..., 1:, :])
@@ -208,8 +208,8 @@ class TDMPC2(struct.PyTreeNode):
 
     for i in range(self.mppi_iterations):
       # Compute elites
-      value = self.estimate_value(z_t, actions, key=value_keys[i])
-      elite_values, elite_inds = jax.lax.top_k(value, self.num_elites)
+      values = self.estimate_value(z_t, actions, key=value_keys[i])
+      elite_values, elite_inds = jax.lax.top_k(values, self.num_elites)
       elite_actions = jnp.take_along_axis(
           actions, elite_inds[..., None, None], axis=-3
       )
@@ -234,11 +234,18 @@ class TDMPC2(struct.PyTreeNode):
 
     # Select final action
     if train:
-      key, action_noise_key = jax.random.split(key)
-      noise = jax.random.normal(action_noise_key, shape=mean[..., 0, :].shape)
-      action = mean[..., 0, :] + std[..., 0, :] * noise
+      key, final_action_key = jax.random.split(key)
+      action_ind = jax.random.categorical(
+          final_action_key, logits=elite_values, shape=batch_shape
+      )
+      action = jnp.take_along_axis(
+          elite_actions[..., 0, :], action_ind[..., None, None], axis=-2
+      ).squeeze(-2)
     else:
-      action = mean[..., 0, :]
+      action_ind = jnp.argmax(elite_values, axis=-2)
+      action = jnp.take_along_axis(
+          elite_actions[..., 0, :], action_ind[..., None, None], axis=-2
+      ).squeeze(-2)
 
     return action, (mean, std)
 
@@ -411,7 +418,7 @@ class TDMPC2(struct.PyTreeNode):
     finished = model_info.pop('finished')
 
     def policy_loss_fn(actor_params: flax.core.FrozenDict):
-      action_key, Q_key = jax.random.split(policy_key, 2)
+      action_key, Q_key, ensemble_key = jax.random.split(policy_key, 3)
       actions, _, log_std, log_probs = self.model.sample_actions(
           z_pred, actor_params, key=action_key
       )
@@ -422,11 +429,13 @@ class TDMPC2(struct.PyTreeNode):
       scale = percentile_normalization(Q[0], self.scale).clip(1, None)
 
       # Compute policy objective (equation 4)
-      policy_loss = jnp.mean(
+      policy_loss = jnp.sum(
           self.rho**jnp.arange(self.horizon+1) * (
               self.entropy_coef * log_probs - Q / sg(scale)
           ).mean(axis=-1, where=~finished)
       )
+      policy_loss /= self.horizon
+      
       return policy_loss, {
           'policy_loss': policy_loss,
           'policy_scale': scale,
@@ -483,12 +492,8 @@ class TDMPC2(struct.PyTreeNode):
 
       discount *= self.discount * continues
 
-    action_key, Q_key = jax.random.split(key, 2)
-    next_action, _, _, _ = self.model.sample_actions(
-        z, self.model.policy_model.params, key=action_key
-    )
     Qs, _ = self.model.Q(
-        z, next_action, self.model.value_model.params, key=Q_key
+        z, actions[..., -1, :], self.model.value_model.params, key=key
     )
     Q = Qs.mean(axis=0)
     return G + discount * Q
