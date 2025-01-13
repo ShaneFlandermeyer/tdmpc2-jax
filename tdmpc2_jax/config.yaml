@@ -53,9 +53,9 @@ tdmpc2:
   batch_size: 256
   discount: 0.99
   rho: 0.5
-  consistency_coef: 20
+  consistency_coef: 10
   reward_coef: 0.1
-  continue_coef: 1.0
   value_coef: 0.1
-  entropy_coef: 1e-4
+  continue_coef: 1.0
+  entropy_coef: 3e-4
   tau: 0.01
