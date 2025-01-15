@@ -4,7 +4,7 @@ hydra:
   run:
     dir: outputs/${hydra.job.name}/${now:%Y-%m-%d_%H-%M-%S}
 
-seed: 0
+seed: 1
 max_steps: 2_000_000
 save_interval_steps: 100000
 log_interval_steps: 10000
@@ -53,9 +53,9 @@ tdmpc2:
   batch_size: 256
   discount: 0.99
   rho: 0.5
-  consistency_coef: 10
-  reward_coef: 0.1
-  value_coef: 0.1
+  consistency_coef: 100
+  reward_coef: 1.0
+  value_coef: 1.0
   continue_coef: 1.0
   entropy_coef: 3e-4
   tau: 0.01

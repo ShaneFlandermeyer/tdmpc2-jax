@@ -104,8 +104,7 @@ class WorldModel(struct.PyTreeNode):
     policy_module = nn.Sequential([
         NormedLinear(latent_dim, activation=mish, dtype=dtype),
         NormedLinear(latent_dim, activation=mish, dtype=dtype),
-        nn.Dense(2*action_dim,
-                 kernel_init=nn.initializers.truncated_normal(0.02))
+        nn.Dense(2*action_dim, kernel_init=nn.initializers.truncated_normal())
     ])
     policy_model = TrainState.create(
         apply_fn=policy_module.apply,
@@ -267,7 +266,6 @@ class WorldModel(struct.PyTreeNode):
     )
     log_std = min_log_std + 0.5 * \
         (max_log_std - min_log_std) * (jnp.tanh(log_std) + 1)
-    std = jnp.exp(log_std)
 
     # Sample action and compute logprobs
     eps = jax.random.normal(key, mean.shape)

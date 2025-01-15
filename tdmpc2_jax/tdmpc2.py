@@ -418,7 +418,7 @@ class TDMPC2(struct.PyTreeNode):
     finished = model_info.pop('finished')
 
     def policy_loss_fn(actor_params: flax.core.FrozenDict):
-      action_key, Q_key, ensemble_key = jax.random.split(policy_key, 3)
+      action_key, Q_key = jax.random.split(policy_key, 2)
       actions, _, log_std, log_probs = self.model.sample_actions(
           z_pred, actor_params, key=action_key
       )
@@ -426,7 +426,7 @@ class TDMPC2(struct.PyTreeNode):
       # Compute Q-values
       Qs, _ = self.model.Q(z_pred, actions, new_value_model.params, key=Q_key)
       Q = Qs.mean(axis=0)
-      scale = percentile_normalization(Q[0], self.scale).clip(1, None)
+      scale = percentile_normalization(Q.mean(0), self.scale).clip(1, None)
 
       # Compute policy objective (equation 4)
       policy_loss = jnp.sum(
@@ -435,7 +435,7 @@ class TDMPC2(struct.PyTreeNode):
           ).mean(axis=-1, where=~finished)
       )
       policy_loss /= self.horizon
-      
+
       return policy_loss, {
           'policy_loss': policy_loss,
           'policy_scale': scale,
