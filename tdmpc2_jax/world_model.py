@@ -14,6 +14,9 @@ import jax.numpy as jnp
 import optax
 from tdmpc2_jax.networks import Ensemble
 from tdmpc2_jax.common.util import symlog, two_hot_inv
+from tensorflow_probability.substrates.jax import distributions as tfd
+from tensorflow_probability.substrates.jax import bijectors as tfb
+from tdmpc2_jax.networks.temperature import Temperature
 
 
 class WorldModel(struct.PyTreeNode):
@@ -25,6 +28,7 @@ class WorldModel(struct.PyTreeNode):
   value_model: TrainState
   target_value_model: TrainState
   continue_model: TrainState
+  temperature_model: Temperature
   # Spaces
   action_dim: int = struct.field(pytree_node=False)
   # Architecture
@@ -56,21 +60,39 @@ class WorldModel(struct.PyTreeNode):
              learning_rate: float,
              max_grad_norm: float = 20,
              # Misc
-
              tabulate: bool = False,
              dtype: jnp.dtype = jnp.float32,
              *,
              key: PRNGKeyArray,
              ):
-    dynamics_key, reward_key, value_key, policy_key, continue_key = jax.random.split(
-        key, 5)
+    dynamics_key, reward_key, value_key, policy_key, continue_key = \
+        jax.random.split(key, 5)
+
+    # Policy model
+    policy_module = nn.Sequential([
+        NormedLinear(latent_dim, activation=mish, dtype=dtype),
+        NormedLinear(latent_dim, activation=mish, dtype=dtype),
+        nn.Dense(2*action_dim, kernel_init=nn.initializers.truncated_normal())
+    ])
+    policy_model = TrainState.create(
+        apply_fn=policy_module.apply,
+        params=policy_module.init(policy_key, jnp.zeros(latent_dim))['params'],
+        tx=optax.chain(
+            optax.zero_nans(),
+            optax.clip_by_global_norm(max_grad_norm),
+            optax.adam(learning_rate),
+        )
+    )
 
     # Latent forward dynamics model
     dynamics_module = nn.Sequential([
         NormedLinear(latent_dim, activation=mish, dtype=dtype),
         NormedLinear(latent_dim, activation=mish, dtype=dtype),
-        NormedLinear(latent_dim, activation=partial(
-            simnorm, simplex_dim=simnorm_dim), dtype=dtype)
+        NormedLinear(
+            latent_dim,
+            activation=partial(simnorm, simplex_dim=simnorm_dim),
+            dtype=dtype
+        )
     ])
     dynamics_model = TrainState.create(
         apply_fn=dynamics_module.apply,
@@ -100,28 +122,13 @@ class WorldModel(struct.PyTreeNode):
         )
     )
 
-    # Policy model
-    policy_module = nn.Sequential([
-        NormedLinear(latent_dim, activation=mish, dtype=dtype),
-        NormedLinear(latent_dim, activation=mish, dtype=dtype),
-        nn.Dense(2*action_dim, kernel_init=nn.initializers.truncated_normal())
-    ])
-    policy_model = TrainState.create(
-        apply_fn=policy_module.apply,
-        params=policy_module.init(policy_key, jnp.zeros(latent_dim))['params'],
-        tx=optax.chain(
-            optax.zero_nans(),
-            optax.clip_by_global_norm(max_grad_norm),
-            optax.adam(learning_rate),
-        )
-    )
-
     # Return/value model (ensemble)
     value_param_key, value_dropout_key = jax.random.split(value_key)
     value_base = partial(nn.Sequential, [
         NormedLinear(latent_dim, activation=mish,
                      dropout_rate=value_dropout, dtype=dtype),
-        NormedLinear(latent_dim, activation=mish, dtype=dtype),
+        NormedLinear(latent_dim, activation=mish,
+                     dropout_rate=value_dropout, dtype=dtype),
         nn.Dense(num_bins, kernel_init=nn.initializers.zeros)
     ])
     value_ensemble = Ensemble(value_base, num=num_value_nets)
@@ -159,6 +166,17 @@ class WorldModel(struct.PyTreeNode):
       )
     else:
       continue_model = None
+
+    temperature_module = Temperature()
+    temperature_model = TrainState.create(
+        apply_fn=temperature_module.apply,
+        params=temperature_module.init(jax.random.key(0))['params'],
+        tx=optax.chain(
+            optax.zero_nans(),
+            optax.clip_by_global_norm(max_grad_norm),
+            optax.adam(learning_rate),
+        )
+    )
 
     if tabulate:
       print("Dynamics Model")
@@ -220,6 +238,7 @@ class WorldModel(struct.PyTreeNode):
         value_model=value_model,
         target_value_model=target_value_model,
         continue_model=continue_model,
+        temperature_model=temperature_model,
         # Architecture
         latent_dim=latent_dim,
         num_value_nets=num_value_nets,
@@ -267,16 +286,11 @@ class WorldModel(struct.PyTreeNode):
     log_std = min_log_std + 0.5 * \
         (max_log_std - min_log_std) * (jnp.tanh(log_std) + 1)
 
-    # Sample action and compute logprobs
-    eps = jax.random.normal(key, mean.shape)
-    action = mean + eps * jnp.exp(log_std)
-    residual = (-0.5 * eps**2 - log_std)
-    log_probs = (residual - 0.5 * jnp.log(2 * jnp.pi)).sum(-1)
+    dist = tfd.MultivariateNormalDiag(loc=mean, scale_diag=jnp.exp(log_std))
+    dist = tfd.TransformedDistribution(distribution=dist, bijector=tfb.Tanh())
 
-    # Squash tanh
-    mean = jnp.tanh(mean)
-    action = jnp.tanh(action)
-    log_probs -= jnp.log(nn.relu(1 - action**2) + 1e-6).sum(-1)
+    action = dist.sample(seed=key)
+    log_probs = dist.log_prob(action)
 
     return action, mean, log_std, log_probs
 

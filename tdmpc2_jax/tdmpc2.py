@@ -1,5 +1,6 @@
 from __future__ import annotations
 from functools import partial
+from einops import rearrange
 from flax import struct
 import flax
 import jax
@@ -13,6 +14,8 @@ import numpy as np
 from typing import Any, Dict, Optional, Tuple
 from tdmpc2_jax.common.scale import percentile_normalization
 from tdmpc2_jax.common.util import sg
+from tdmpc2_jax.common.util import two_hot
+from tdmpc2_jax.networks.temperature import update_temperature
 
 
 class TDMPC2(struct.PyTreeNode):
@@ -289,9 +292,10 @@ class TDMPC2(struct.PyTreeNode):
       ###########################################################
       done = jnp.logical_or(terminated, truncated)
       finished = jnp.zeros((self.horizon+1, self.batch_size), dtype=bool)
-      consistency_loss = 0
       z_pred = jnp.zeros((self.horizon+1, self.batch_size, next_z.shape[-1]))
       z_pred = z_pred.at[0].set(first_z)
+
+      consistency_loss = 0
       for t in range(self.horizon):
         z_pred = z_pred.at[t+1].set(
             self.model.next(z_pred[t], actions[t], dynamics_params)
@@ -306,12 +310,15 @@ class TDMPC2(struct.PyTreeNode):
       # Reward loss
       ###########################################################
       _, reward_logits = self.model.reward(z_pred[:-1], actions, reward_params)
+      reward_targets = two_hot(
+          rewards,
+          self.model.symlog_min,
+          self.model.symlog_max,
+          self.model.num_bins
+      )
       reward_loss = jnp.sum(
           self.rho**np.arange(self.horizon) * soft_crossentropy(
-              reward_logits, rewards,
-              self.model.symlog_min,
-              self.model.symlog_max,
-              self.model.num_bins
+              reward_logits, sg(reward_targets)
           ).mean(axis=-1, where=~finished[:-1])
       )
 
@@ -321,9 +328,12 @@ class TDMPC2(struct.PyTreeNode):
       next_action_key, ensemble_key, Q_key = jax.random.split(value_key, 3)
 
       # TD targets
-      next_action, _, _, _ = self.model.sample_actions(
+      next_action, _, _, next_log_probs = self.model.sample_actions(
           next_z, self.model.policy_model.params, key=next_action_key
       )
+      alpha = self.model.temperature_model.apply_fn(
+            {'params': self.model.temperature_model.params}
+        )
       Qs, _ = self.model.Q(
           next_z, next_action, self.model.target_value_model.params, key=Q_key
       )
@@ -335,15 +345,19 @@ class TDMPC2(struct.PyTreeNode):
           replace=False
       )
       Q = Qs[inds].min(axis=0)
-      td_targets = rewards + (1 - terminated) * self.discount * Q
+      td_targets = rewards + (1 - terminated) * self.discount * \
+          (Q - alpha * next_log_probs)
+      td_targets = two_hot(
+          td_targets,
+          self.model.symlog_min,
+          self.model.symlog_max,
+          self.model.num_bins
+      )
 
       _, Q_logits = self.model.Q(z_pred[:-1], actions, value_params, key=Q_key)
       value_loss = jnp.sum(
           self.rho**np.arange(self.horizon) * soft_crossentropy(
-              Q_logits, sg(td_targets),
-              self.model.symlog_min,
-              self.model.symlog_max,
-              self.model.num_bins
+              Q_logits, sg(td_targets)
           ).mean(axis=-1, where=~finished[:-1])
       )
 
@@ -426,19 +440,23 @@ class TDMPC2(struct.PyTreeNode):
       # Compute Q-values
       Qs, _ = self.model.Q(z_pred, actions, new_value_model.params, key=Q_key)
       Q = Qs.mean(axis=0)
-      scale = percentile_normalization(Q.mean(0), self.scale).clip(1, None)
+    #   scale = percentile_normalization(Q.mean(0), self.scale).clip(1, None)
+      alpha = self.model.temperature_model.apply_fn(
+          {'params': self.model.temperature_model.params}
+      )
 
       # Compute policy objective (equation 4)
+      A = self.model.action_dim
       policy_loss = jnp.sum(
           self.rho**jnp.arange(self.horizon+1) * (
-              self.entropy_coef * log_probs - Q / sg(scale)
+              alpha * log_probs - Q
           ).mean(axis=-1, where=~finished)
       )
       policy_loss /= self.horizon
 
       return policy_loss, {
           'policy_loss': policy_loss,
-          'policy_scale': scale,
+          #   'policy_scale': scale,
           'log_std': log_std,
           'entropy': -log_probs.mean()
       }
@@ -447,6 +465,13 @@ class TDMPC2(struct.PyTreeNode):
         self.model.policy_model.params
     )
     new_policy = self.model.policy_model.apply_gradients(grads=policy_grads)
+
+    # Update temperature
+    new_temperature_model, temperature_info = update_temperature(
+        temperature_model=self.model.temperature_model,
+        entropy=policy_info['entropy'],
+        target_entropy=-0.5 * self.model.action_dim
+    )
 
     # Update model
     new_agent = self.replace(
@@ -457,11 +482,12 @@ class TDMPC2(struct.PyTreeNode):
             value_model=new_value_model,
             policy_model=new_policy,
             target_value_model=new_target_value_model,
-            continue_model=new_continue_model
+            continue_model=new_continue_model,
+            temperature_model=new_temperature_model,
         ),
-        scale=policy_info['policy_scale']
+        # scale=policy_info['policy_scale']
     )
-    info = {**model_info, **policy_info}
+    info = {**model_info, **policy_info, **temperature_info}
 
     return new_agent, info
 

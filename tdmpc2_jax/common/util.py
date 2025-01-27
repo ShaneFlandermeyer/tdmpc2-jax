@@ -48,12 +48,13 @@ def two_hot_inv(x: jax.Array,
                 low: float, high: float, num_bins: int,
                 apply_softmax: bool = True) -> jax.Array:
 
-  bins = jnp.linspace(low, high, num_bins)
+  bins = jnp.linspace(low, high, num_bins+1)
+  centers = (bins[:-1] + bins[1:]) / 2
 
   if apply_softmax:
     x = jax.nn.softmax(x, axis=-1)
 
-  x = jnp.sum(x * bins, axis=-1)
+  x = jnp.sum(x * centers, axis=-1)
   return symexp(x)
 
 

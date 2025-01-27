@@ -20,17 +20,20 @@ class NormedLinear(nn.Module):
   def __call__(self,
                x: jax.Array,
                train: bool = True) -> jax.Array:
-    x = nn.Dense(features=self.features,
-                 kernel_init=self.kernel_init,
-                 bias_init=nn.initializers.zeros_init(),
-                 dtype=self.dtype,
-                 param_dtype=self.param_dtype)(x)
-
-    x = self.norm(dtype=self.dtype)(x)
-    if self.activation is not None:
-      x = self.activation(x)
+    x = nn.Dense(
+        features=self.features,
+        kernel_init=self.kernel_init,
+        bias_init=nn.initializers.zeros_init(),
+        dtype=self.dtype,
+        param_dtype=self.param_dtype
+    )(x)
 
     if self.dropout_rate is not None and self.dropout_rate > 0:
       x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=not train)
+
+    x = self.norm(dtype=self.dtype)(x)
+
+    if self.activation is not None:
+      x = self.activation(x)
 
     return x

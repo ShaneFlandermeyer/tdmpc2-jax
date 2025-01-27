@@ -57,5 +57,5 @@ tdmpc2:
   reward_coef: 1.0
   value_coef: 1.0
   continue_coef: 1.0
-  entropy_coef: 3e-4
+  entropy_coef: 1e-4
   tau: 0.01
