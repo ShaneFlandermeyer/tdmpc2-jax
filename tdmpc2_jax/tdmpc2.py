@@ -92,144 +92,146 @@ class TDMPC2(struct.PyTreeNode):
           *,
           key: PRNGKeyArray
           ) -> Tuple[np.ndarray, Optional[Tuple[jax.Array]]]:
-    plan_key, encoder_key = jax.random.split(key, 2)
+    encoder_key, action_key = jax.random.split(key, 2)
     z = self.model.encode(obs, self.model.encoder.params, key=encoder_key)
 
     if self.mpc:
-      num_envs = z.shape[0] if z.ndim > 1 else 1
       if prev_plan is None:
+        batch_dims = z.shape[:-1]
         prev_plan = (
-            jnp.zeros((num_envs, self.horizon, self.model.action_dim)),
+            jnp.zeros((*batch_dims, self.horizon, self.model.action_dim)),
             jnp.full(
-                (num_envs, self.horizon, self.model.action_dim),
+                (*batch_dims, self.horizon, self.model.action_dim),
                 self.max_plan_std
             )
         )
       action, plan = self.plan(
-          z, prev_plan, train, jax.random.split(plan_key, num_envs)
+          z=z,
+          prev_plan=prev_plan,
+          train=train,
+          key=action_key
       )
-      action = action.squeeze(0) if z.ndim == 1 else action
-
     else:
       action = self.model.sample_actions(
-          z, self.model.policy_model.params, key=plan_key
+          z, self.model.policy_model.params, key=action_key
       )[0]
       plan = None
 
     return np.array(action), plan
 
-  @jax.jit
-  @partial(jax.vmap, in_axes=(None, 0, 0, None, 0), out_axes=0)
+  @partial(jax.jit, static_argnames=('train'))
   def plan(self,
            z: jax.Array,
            prev_plan: Tuple[jax.Array, jax.Array],
            train: bool,
+           *,
            key: PRNGKeyArray,
            ) -> Tuple[jax.Array, Tuple[jax.Array, jax.Array]]:
-    """
-    Select next action via MPPI planner
-
-    Parameters
-    ----------
-    z : jax.Array
-        Enncoded environment observation
-    key : PRNGKeyArray
-        Jax PRNGKey
-    prev_mean : jax.Array, optional
-        Mean from previous planning interval. If present, MPPI is given a warm start by time-shifting this value by 1 step. If None, the MPPI mean is set to zero, by default None
-    train : bool, optional
-        If True, inject noise into the final selected action, by default False
-
-    Returns
-    -------
-    Tuple[jax.Array, jax.Array]
-        - Action output from planning
-        - Final mean value (for use in warm start)
-    """
-    z = jnp.atleast_2d(z)
+    batch_shape = z.shape[:-1]
     actions = jnp.zeros(
-        (self.horizon, self.population_size, self.model.action_dim)
+        (
+            *batch_shape,
+            self.population_size,
+            self.horizon,
+            self.model.action_dim
+        )
     )
 
     ###########################################################
     # Policy prior samples
     ###########################################################
-    key, *prior_noise_keys = jax.random.split(key, 1+self.horizon)
-    policy_actions = jnp.zeros(
-        (self.horizon, self.policy_prior_samples, self.model.action_dim)
-    )
-    z_t = z.repeat(self.policy_prior_samples, axis=0)
-    for t in range(self.horizon):
-      policy_actions = policy_actions.at[t].set(
-          self.model.sample_actions(
-              z_t, self.model.policy_model.params, key=prior_noise_keys[t]
-          )[0]
+    if self.policy_prior_samples > 0:
+      key, *prior_noise_keys = jax.random.split(key, 1+self.horizon)
+      policy_actions = jnp.zeros(
+          (
+              *batch_shape,
+              self.policy_prior_samples,
+              self.horizon,
+              self.model.action_dim
+          )
       )
-      if t < self.horizon - 1:  # Don't need for the last time step
-        z_t = self.model.next(
-            z_t, policy_actions[t], self.model.dynamics_model.params
+      z_t = z[..., None, :].repeat(self.policy_prior_samples, axis=-2)
+      for t in range(self.horizon):
+        policy_actions = policy_actions.at[..., t, :].set(
+            self.model.sample_actions(
+                z_t, self.model.policy_model.params, key=prior_noise_keys[t]
+            )[0]
         )
+        if t < self.horizon-1:  # Don't need for the last time step
+          z_t = self.model.next(
+              z_t,
+              policy_actions[..., t, :],
+              self.model.dynamics_model.params
+          )
 
-    actions = actions.at[:, :self.policy_prior_samples].set(policy_actions)
+      actions = actions.at[..., :self.policy_prior_samples, :, :].set(
+          policy_actions
+      )
 
     ###########################################################
     # MPPI planning
     ###########################################################
-    key, mppi_noise_key, *value_keys = \
-        jax.random.split(key, 2+self.mppi_iterations)
+    z_t = z[..., None, :].repeat(self.population_size, axis=-2)
+    key, mppi_noise_key, *value_keys = jax.random.split(
+        key, 2+self.mppi_iterations
+    )
     noise = jax.random.normal(
         mppi_noise_key,
         shape=(
+            *batch_shape,
+            self.population_size - self.policy_prior_samples,
             self.mppi_iterations,
             self.horizon,
-            self.population_size - self.policy_prior_samples,
             self.model.action_dim
         )
     )
     # Initialize population state
-    z_t = z.repeat(self.population_size, axis=0)
-    mean = jnp.zeros((self.horizon, self.model.action_dim))
-    std = jnp.full((self.horizon, self.model.action_dim), self.max_plan_std)
-    # Warm start with previous plan
-    mean = mean.at[:-1].set(prev_plan[0][1:])
-    std = std.at[:-1].set(prev_plan[1][1:])
+    mean = jnp.zeros((*batch_shape, self.horizon, self.model.action_dim))
+    std = jnp.full(
+        (*batch_shape, self.horizon, self.model.action_dim),
+        self.max_plan_std
+    )
+    mean = mean.at[..., :-1, :].set(prev_plan[0][..., 1:, :])
+    std = std.at[..., :-1, :].set(prev_plan[1][..., 1:, :])
 
     for i in range(self.mppi_iterations):
-      # Sample actions
-      actions = actions.at[:, self.policy_prior_samples:].set(
-          mean[:, None, :] + std[:, None, :] * noise[i]
-      )
-      actions = actions.clip(-1, 1)
+      actions = actions.at[..., self.policy_prior_samples:, :, :].set(
+          mean[..., None, :, :] + std[..., None, :, :] * noise[..., i, :, :]
+      ).clip(-1, 1)
 
       # Compute elites
-      value = self.estimate_value(z_t, actions, key=value_keys[i])
-      _, elite_inds = jax.lax.top_k(value, self.num_elites)
-      elite_values, elite_actions = value[elite_inds], actions[:, elite_inds]
+      values = self.estimate_value(z_t, actions, key=value_keys[i])
+      elite_values, elite_inds = jax.lax.top_k(values, self.num_elites)
+      elite_actions = jnp.take_along_axis(
+          actions, elite_inds[..., None, None], axis=-3
+      )
 
       # Update population distribution
-    #   score = jnp.exp(self.temperature * (elite_values - elite_values.max()))
-    #   score /= score.sum(axis=0) + jnp.finfo(score.dtype).eps
       score = jax.nn.softmax(elite_values)
-      mean = jnp.sum(score[None, :, None] * elite_actions, axis=1)
+      mean = jnp.sum(score[..., None, None] * elite_actions, axis=-3)
       std = jnp.sqrt(
           jnp.sum(
-              score[None, :, None] * (elite_actions - mean[:, None, :])**2, axis=1
+              score[..., None, None] *
+              (elite_actions - mean[..., None, :, :])**2,
+              axis=-3
           )
       ).clip(self.min_plan_std, self.max_plan_std)
 
-    # Sample final action
-    key, action_select_key, action_noise_key = jax.random.split(key, 3)
-    action_ind = jax.random.choice(
-        action_select_key, a=jnp.arange(self.num_elites), p=score
+    # Select final action
+    key, final_action_key = jax.random.split(key)
+    action_ind = jax.random.categorical(
+        final_action_key, logits=elite_values, shape=batch_shape
     )
-    actions = elite_actions[:, action_ind]
+    action = jnp.take_along_axis(
+        elite_actions[..., 0, :], action_ind[..., None, None], axis=-2
+    ).squeeze(-2)
+    if train:
+      key, final_noise_key = jax.random.split(key)
+      action += std[..., 0, :] * jax.random.normal(
+          final_noise_key, shape=batch_shape + (self.model.action_dim,)
+      )
 
-    action, action_std = actions[0], std[0]
-    action += jnp.array(train, float) * \
-        action_std * jax.random.normal(action_noise_key, shape=action.shape)
-    action = action.clip(-1, 1)
-
-    return action, (mean, std)
+    return action.clip(-1, 1), (mean, std)
 
   @jax.jit
   def update(self,
@@ -446,9 +448,11 @@ class TDMPC2(struct.PyTreeNode):
     G, discount = 0.0, 1.0
     for t in range(self.horizon):
       reward, _ = self.model.reward(
-          z, actions[t], self.model.reward_model.params
+          z, actions[..., t, :], self.model.reward_model.params
       )
-      z = self.model.next(z, actions[t], self.model.dynamics_model.params)
+      z = self.model.next(
+          z, actions[..., t, :], self.model.dynamics_model.params
+      )
       G += discount * reward
 
       if self.model.predict_continues:
@@ -471,4 +475,4 @@ class TDMPC2(struct.PyTreeNode):
         z, next_action, self.model.value_model.params, key=Q_key
     )
     Q = Qs.mean(axis=0)
-    return sg(G + discount * Q)
+    return G + discount * Q
