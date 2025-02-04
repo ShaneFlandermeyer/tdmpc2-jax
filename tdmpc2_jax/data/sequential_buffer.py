@@ -108,7 +108,7 @@ class SequentialReplayBuffer():
         self.data
     )
 
-    return batch
+    return batch, env_inds, sequence_inds
 
   def get_state(self) -> Dict:
     return {

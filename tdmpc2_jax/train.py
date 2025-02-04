@@ -130,7 +130,9 @@ def train(cfg: dict):
           reward=dummy_reward,
           next_observation=dummy_next_obs,
           terminated=dummy_term,
-          truncated=dummy_trunc
+          truncated=dummy_trunc,
+          expert_mean=np.zeros_like(dummy_action),
+          expert_std=np.ones_like(dummy_action),
       )
   )
 
@@ -204,11 +206,13 @@ def train(cfg: dict):
     seed_steps = int(
         max(5*T, 1000) * env_config.num_envs * env_config.utd_ratio
     )
+    num_updates = 0
     pbar = tqdm.tqdm(initial=global_step, total=cfg.max_steps)
     done = np.zeros(env_config.num_envs, dtype=bool)
     for global_step in range(global_step, cfg.max_steps, env_config.num_envs):
       if global_step <= seed_steps:
         action = env.action_space.sample()
+        expert_mean, expert_std = action, np.ones_like(action)
       else:
         rng, action_key = jax.random.split(rng)
         if prev_plan is not None:
@@ -218,6 +222,8 @@ def train(cfg: dict):
         action, prev_plan = agent.act(
             observation, prev_plan=prev_plan, train=True, key=action_key
         )
+        expert_mean = prev_plan[0][..., 0, :]
+        expert_std = prev_plan[1][..., 0, :]
 
       next_observation, reward, terminated, truncated, info = env.step(action)
 
@@ -229,7 +235,9 @@ def train(cfg: dict):
                 reward=reward,
                 next_observation=next_observation,
                 terminated=terminated,
-                truncated=truncated
+                truncated=truncated,
+                expert_mean=expert_mean,
+                expert_std=expert_std,
             ),
             env_mask=~done
         )
@@ -258,8 +266,10 @@ def train(cfg: dict):
         if global_step == seed_steps:
           print('Pre-training on seed data...')
           num_updates = seed_steps
+          pretrain = True
         else:
           num_updates = max(1, int(env_config.num_envs * env_config.utd_ratio))
+          pretrain = False
 
         rng, *update_keys = jax.random.split(rng, num_updates+1)
         log_this_step = global_step >= prev_logged_step + \
@@ -269,7 +279,9 @@ def train(cfg: dict):
           prev_logged_step = global_step
 
         for iupdate in range(num_updates):
-          batch = replay_buffer.sample(agent.batch_size, agent.horizon)
+          batch, batch_env_inds, batch_seq_inds = replay_buffer.sample(
+              agent.batch_size, agent.horizon
+          )
           agent, train_info = agent.update(
               observations=batch['observation'],
               actions=batch['action'],
@@ -277,9 +289,43 @@ def train(cfg: dict):
               next_observations=batch['next_observation'],
               terminated=batch['terminated'],
               truncated=batch['truncated'],
+              expert_mean=batch['expert_mean'],
+              expert_std=batch['expert_std'],
+              update_policy=not pretrain,
               key=update_keys[iupdate]
           )
+          num_updates += 1
 
+          # Reanalyze
+          # TODO: Make this a separate function in the BMPC class
+          k = 10
+          b = 20
+          h = 3
+          if num_updates % k == 0:
+            rng, reanalyze_key = jax.random.split(rng)
+            zs = train_info.pop('true_zs')
+            _, plan_dist = agent.plan(
+                z=zs[:, :b, :],
+                horizon=h,
+                prev_plan=(
+                    jnp.zeros((b, h, agent.model.action_dim)),
+                    jnp.full(
+                        (b, h, agent.model.action_dim), agent.max_plan_std
+                    )
+                ),
+                train=True,
+                key=reanalyze_key
+            )
+            # Update expert policy in replay buffer
+            env_inds = batch_env_inds[:b, None]
+            seq_inds = batch_seq_inds[:b]
+            # (T, B, A) -> (B, T, A)
+            expert_mean = np.swapaxes(plan_dist[0][..., 0, :], 0, 1)
+            expert_std = np.swapaxes(plan_dist[1][..., 0, :], 0, 1)
+            replay_buffer.data['expert_mean'][seq_inds, env_inds] = expert_mean
+            replay_buffer.data['expert_std'][seq_inds, env_inds] = expert_std
+
+        
           if log_this_step:
             for k, v in train_info.items():
               all_train_info[k].append(np.array(v))

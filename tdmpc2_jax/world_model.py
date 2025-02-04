@@ -14,6 +14,9 @@ import jax.numpy as jnp
 import optax
 from tdmpc2_jax.networks import Ensemble
 from tdmpc2_jax.common.util import symlog, two_hot_inv
+from tensorflow_probability.substrates.jax import distributions as tfd
+from tensorflow_probability.substrates.jax import bijectors as tfb
+import flax
 
 
 class WorldModel(struct.PyTreeNode):
@@ -130,7 +133,7 @@ class WorldModel(struct.PyTreeNode):
         apply_fn=value_ensemble.apply,
         params=value_ensemble.init(
             {'params': value_param_key, 'dropout': value_dropout_key},
-            jnp.zeros(latent_dim + action_dim))['params'],
+            jnp.zeros(latent_dim))['params'],
         tx=optax.chain(
             optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
@@ -256,8 +259,8 @@ class WorldModel(struct.PyTreeNode):
   def sample_actions(self,
                      z: jax.Array,
                      params: Dict,
-                     min_log_std: float = -10,
-                     max_log_std: float = 2,
+                     min_log_std: float = -3,
+                     max_log_std: float = 1,
                      *,
                      key: PRNGKeyArray
                      ) -> Tuple[jax.Array, ...]:
@@ -265,29 +268,23 @@ class WorldModel(struct.PyTreeNode):
     mean, log_std = jnp.split(
         self.policy_model.apply_fn({'params': params}, z), 2, axis=-1
     )
-    log_std = min_log_std + 0.5 * \
-        (max_log_std - min_log_std) * (jnp.tanh(log_std) + 1)
+    mean = jnp.tanh(mean)
+    log_std = min_log_std + (max_log_std - min_log_std) * \
+        0.5 * (jnp.tanh(log_std) + 1)
 
     # Sample action and compute logprobs
-    eps = jax.random.normal(key, mean.shape)
-    action = mean + eps * jnp.exp(log_std)
-    residual = (-0.5 * eps**2 - log_std).sum(-1)
-    log_probs = action.shape[-1] * (residual - 0.5 * jnp.log(2 * jnp.pi))
+    dist = tfd.MultivariateNormalDiag(loc=mean, scale_diag=jnp.exp(log_std))
+    action = dist.sample(seed=key)
+    log_probs = dist.log_prob(action)
 
-    # Squash tanh
-    mean = jnp.tanh(mean)
-    action = jnp.tanh(action)
-    log_probs -= jnp.log(nn.relu(1 - action**2) + 1e-6).sum(-1)
-
-    return action, mean, log_std, log_probs
+    return action.clip(-1, 1), mean, log_std, log_probs
 
   @jax.jit
-  def Q(self, z: jax.Array, a: jax.Array, params: Dict, key: PRNGKeyArray
+  def V(self, z: jax.Array, params: Dict, key: PRNGKeyArray
         ) -> Tuple[jax.Array, jax.Array]:
-    z = jnp.concatenate([z, a], axis=-1)
     logits = self.value_model.apply_fn(
         {'params': params}, z, rngs={'dropout': key}
     )
 
-    Q = two_hot_inv(logits, self.symlog_min, self.symlog_max, self.num_bins)
-    return Q, logits
+    V = two_hot_inv(logits, self.symlog_min, self.symlog_max, self.num_bins)
+    return V, logits

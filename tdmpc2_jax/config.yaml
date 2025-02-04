@@ -27,7 +27,7 @@ encoder:
 world_model:
   latent_dim: 512
   value_dropout: 0.01
-  num_value_nets: 5
+  num_value_nets: 2
   num_bins: 101
   symlog_min: -10
   symlog_max: 10
