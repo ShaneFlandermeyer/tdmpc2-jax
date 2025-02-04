@@ -431,10 +431,12 @@ class TDMPC2(struct.PyTreeNode):
       action_dist = tfd.MultivariateNormalDiag(mean, jnp.exp(log_std))
       expert_dist = tfd.MultivariateNormalDiag(expert_mean, expert_std)
       kl_div = tfd.kl_divergence(action_dist, expert_dist)
-      scale = percentile_normalization(kl_div[0], self.scale).clip(1, None)
+      scale = percentile_normalization(
+          kl_div.mean(axis=0), self.scale
+      ).clip(1, None)
       policy_loss = jnp.mean(
           self.rho**jnp.arange(self.horizon)[:, None] *
-          self.entropy_coef * log_probs + kl_div / sg(scale),
+          (self.entropy_coef * log_probs + kl_div / sg(scale)),
           where=~finished[:-1]
       )
 
@@ -496,6 +498,6 @@ class TDMPC2(struct.PyTreeNode):
         shape=(2, ),
         replace=False
     )
-    V = Vs[inds].min(axis=0)
+    V = Vs[inds].mean(axis=0)
     td_targets = Gs + discount * V
     return td_targets
