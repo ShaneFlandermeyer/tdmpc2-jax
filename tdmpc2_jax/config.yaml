@@ -59,3 +59,8 @@ tdmpc2:
   value_coef: 0.1
   entropy_coef: 1e-4
   tau: 0.01
+
+bmpc:
+  reanalyze_interval: 10
+  reanalyze_batch_size: 20
+  reanalyze_horizon: 3
