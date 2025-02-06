@@ -312,7 +312,7 @@ def train(cfg: dict):
                         (b, h, agent.model.action_dim), agent.max_plan_std
                     )
                 ),
-                train=False,
+                deterministic=True,
                 key=reanalyze_key
             )
             # Update expert policy in buffer

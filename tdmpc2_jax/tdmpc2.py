@@ -12,7 +12,7 @@ from tdmpc2_jax.common.loss import soft_crossentropy
 import numpy as np
 from typing import Any, Dict, Optional, Tuple
 from tdmpc2_jax.common.scale import percentile_normalization
-from tdmpc2_jax.common.util import sg
+from tdmpc2_jax.common.util import sg, symlog
 from tensorflow_probability.substrates.jax import distributions as tfd
 
 
@@ -110,7 +110,7 @@ class TDMPC2(struct.PyTreeNode):
           z=z,
           horizon=self.horizon,
           prev_plan=prev_plan,
-          train=train,
+          deterministic=not train,
           key=action_key
       )
     else:
@@ -121,12 +121,12 @@ class TDMPC2(struct.PyTreeNode):
 
     return np.array(action), plan
 
-  @partial(jax.jit, static_argnames=('horizon', 'train'))
+  @partial(jax.jit, static_argnames=('horizon', 'deterministic'))
   def plan(self,
            z: jax.Array,
            horizon: int,
            prev_plan: Tuple[jax.Array, jax.Array],
-           train: bool,
+           deterministic: bool,
            *,
            key: PRNGKeyArray,
            ) -> Tuple[jax.Array, Tuple[jax.Array, jax.Array]]:
@@ -202,7 +202,9 @@ class TDMPC2(struct.PyTreeNode):
       ).clip(-1, 1)
 
       # Compute elites
-      values = self.estimate_value(z_t, actions, horizon, key=value_keys[i])
+      values = symlog(
+          self.estimate_value(z_t, actions, horizon, key=value_keys[i])
+      )
       elite_values, elite_inds = jax.lax.top_k(values, self.num_elites)
       elite_actions = jnp.take_along_axis(
           actions, elite_inds[..., None, None], axis=-3
@@ -220,16 +222,11 @@ class TDMPC2(struct.PyTreeNode):
       ).clip(self.min_plan_std, self.max_plan_std)
 
     # Select final action
-    key, final_action_key = jax.random.split(key)
-    action_ind = jax.random.categorical(
-        final_action_key, logits=elite_values, shape=batch_shape
-    )
-    action = jnp.take_along_axis(
-        elite_actions[..., 0, :], action_ind[..., None, None], axis=-2
-    ).squeeze(-2)
-    if train:
+    if deterministic:
+      action = mean[..., 0, :]
+    else:
       key, final_noise_key = jax.random.split(key)
-      action += std[..., 0, :] * jax.random.normal(
+      action = mean[..., 0, :] + std[..., 0, :] * jax.random.normal(
           final_noise_key, shape=batch_shape + (self.model.action_dim,)
       )
 
@@ -440,7 +437,11 @@ class TDMPC2(struct.PyTreeNode):
           where=~finished[:-1]
       )
 
-      return policy_loss, {'policy_loss': policy_loss, 'policy_scale': scale}
+      return policy_loss, {
+          'policy_loss': policy_loss,
+          'policy_scale': scale,
+          'entropy': -log_probs.mean()
+      }
 
     if update_policy:
       policy_grads, policy_info = jax.grad(policy_loss_fn, has_aux=True)(
