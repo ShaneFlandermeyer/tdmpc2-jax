@@ -248,17 +248,15 @@ class TDMPC2(struct.PyTreeNode):
           z, actions[..., t, :], self.model.dynamics_model.params
       )
       G += discount * reward
-
+      discount *= self.discount
+      
       if self.model.predict_continues:
         continues = jax.nn.sigmoid(
             self.model.continue_model.apply_fn(
                 {'params': self.model.continue_model.params}, z
             )
         ).squeeze(-1) > 0.5
-      else:
-        continues = 1.0
-
-      discount *= self.discount * continues
+        discount *= continues
 
     Vs, _ = self.model.V(z, self.model.value_model.params, key=key)
     V = Vs.mean(axis=0)
@@ -266,17 +264,15 @@ class TDMPC2(struct.PyTreeNode):
 
   @jax.jit
   def update_world_model(self,
-             observations: PyTree,
-             actions: jax.Array,
-             rewards: jax.Array,
-             next_observations: PyTree,
-             terminated: jax.Array,
-             truncated: jax.Array,
-             *,
-             key: PRNGKeyArray
-             ) -> Tuple[TDMPC2, Dict[str, Any]]:
-
-    world_model_key, policy_key = jax.random.split(key, 2)
+                         observations: PyTree,
+                         actions: jax.Array,
+                         rewards: jax.Array,
+                         next_observations: PyTree,
+                         terminated: jax.Array,
+                         truncated: jax.Array,
+                         *,
+                         key: PRNGKeyArray
+                         ) -> Tuple[TDMPC2, Dict[str, Any]]:
 
     def world_model_loss_fn(encoder_params: flax.core.FrozenDict,
                             dynamics_params: flax.core.FrozenDict,
@@ -284,7 +280,7 @@ class TDMPC2(struct.PyTreeNode):
                             reward_params: flax.core.FrozenDict,
                             continue_params: flax.core.FrozenDict,
                             ) -> Tuple[jax.Array, Dict[str, Any]]:
-      encoder_key, value_key = jax.random.split(world_model_key, 2)
+      encoder_key, value_key = jax.random.split(key, 2)
 
       ###########################################################
       # Encoder forward pass
@@ -419,11 +415,9 @@ class TDMPC2(struct.PyTreeNode):
             dynamics_model=new_dynamics_model,
             reward_model=new_reward_model,
             value_model=new_value_model,
-            # policy_model=new_policy,
             target_value_model=new_target_value_model,
             continue_model=new_continue_model
         ),
-        # scale=policy_scale
     )
     return new_agent, info
 
@@ -431,7 +425,7 @@ class TDMPC2(struct.PyTreeNode):
                 z: jax.Array,
                 num_td_steps: int = 1,
                 *,
-                key: jax.Array
+                key: PRNGKeyArray
                 ) -> jax.Array:
     key, *action_keys = jax.random.split(key, 1+num_td_steps)
     Gs, discount = 0, 1
@@ -442,8 +436,15 @@ class TDMPC2(struct.PyTreeNode):
       reward, _ = self.model.reward(z, action, self.model.reward_model.params)
       z = self.model.next(z, action, self.model.dynamics_model.params)
       Gs += discount * reward
-      # TODO: Handle terminations/continues
       discount *= self.discount
+      
+      if self.model.predict_continues:
+        continues = jax.nn.sigmoid(
+            self.model.continue_model.apply_fn(
+                {'params': self.model.continue_model.params}, z
+            )
+        ).squeeze(-1) > 0.5
+        discount *= continues
 
     # Subsample value networks
     value_key, ensemble_key = jax.random.split(key, 2)
@@ -457,8 +458,8 @@ class TDMPC2(struct.PyTreeNode):
         replace=False
     )
     V = Vs[inds].mean(axis=0)
-    td_targets = Gs + discount * V
-    return td_targets
+    td_target = Gs + discount * V
+    return td_target
 
   @jax.jit
   def update_policy(self,
@@ -466,7 +467,6 @@ class TDMPC2(struct.PyTreeNode):
                     expert_mean: jax.Array,
                     expert_std: jax.Array,
                     reanalyze_age: jax.Array,
-                    finished: jax.Array,
                     key: PRNGKeyArray
                     ):
     def policy_loss_fn(actor_params: flax.core.FrozenDict):
@@ -481,13 +481,11 @@ class TDMPC2(struct.PyTreeNode):
       policy_scale = percentile_normalization(
           kl_div.mean(axis=0), self.scale
       ).clip(1, None)
-      
+
       reanalyze_scale = 0.99**reanalyze_age
       policy_loss = jnp.mean(
-          reanalyze_scale * 
-        #   self.rho**jnp.arange(self.horizon)[:, None] *
+          reanalyze_scale *
           (self.entropy_coef * log_probs + kl_div / sg(policy_scale)),
-          where=~finished[:-1]
       )
 
       return policy_loss, {
@@ -495,11 +493,12 @@ class TDMPC2(struct.PyTreeNode):
           'policy_scale': policy_scale,
           'entropy': -log_probs.mean()
       }
+      
     policy_grads, policy_info = jax.grad(policy_loss_fn, has_aux=True)(
         self.model.policy_model.params
     )
     new_policy = self.model.policy_model.apply_gradients(grads=policy_grads)
-    
+
     new_agent = self.replace(
         model=self.model.replace(policy_model=new_policy),
         scale=policy_info['policy_scale']

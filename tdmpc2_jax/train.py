@@ -324,14 +324,12 @@ def train(cfg: dict):
             # Reshape for buffer: (T, B, A) -> (B, T, A)
             env_inds = batch_env_inds[:b, None]
             seq_inds = batch_seq_inds[:b]
-            replay_buffer.data['expert_mean'][seq_inds, env_inds] = np.swapaxes(
-                reanalyze_mean, 0, 1
-            )
-            replay_buffer.data['expert_std'][seq_inds, env_inds] = np.swapaxes(
-                reanalyze_std, 0, 1
-            )
-            replay_buffer.data['last_reanalyze'][seq_inds, env_inds] = total_reanalyze_steps
-            
+            replay_buffer.data['expert_mean'][seq_inds, env_inds] = \
+                np.swapaxes(reanalyze_mean, 0, 1)
+            replay_buffer.data['expert_std'][seq_inds, env_inds] = \
+                np.swapaxes(reanalyze_std, 0, 1)
+            replay_buffer.data['last_reanalyze'][seq_inds, env_inds] = \
+                total_reanalyze_steps
 
             # Update expert distribution in batch
             batch['expert_mean'][:, :b, :] = reanalyze_mean
@@ -345,7 +343,6 @@ def train(cfg: dict):
                 expert_mean=batch['expert_mean'],
                 expert_std=batch['expert_std'],
                 reanalyze_age=total_reanalyze_steps - batch['last_reanalyze'],
-                finished=finished,
                 key=policy_key
             )
             train_info.update(policy_info)
