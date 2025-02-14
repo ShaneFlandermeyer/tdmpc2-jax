@@ -134,6 +134,7 @@ def train(cfg: dict):
           truncated=dummy_trunc,
           expert_mean=np.zeros_like(dummy_action),
           expert_std=np.ones_like(dummy_action),
+          last_reanalyze=np.zeros(env_config.num_envs, dtype=int),
       )
   )
 
@@ -208,6 +209,7 @@ def train(cfg: dict):
         max(5*T, 1000) * env_config.num_envs * env_config.utd_ratio
     )
     total_num_updates = 0
+    total_reanalyze_steps = 0
     pbar = tqdm.tqdm(initial=global_step, total=cfg.max_steps)
     done = np.zeros(env_config.num_envs, dtype=bool)
     for global_step in range(global_step, cfg.max_steps, env_config.num_envs):
@@ -239,6 +241,7 @@ def train(cfg: dict):
                 truncated=truncated,
                 expert_mean=expert_mean,
                 expert_std=expert_std,
+                last_reanalyze=np.zeros(env_config.num_envs, dtype=int),
             ),
             env_mask=~done
         )
@@ -283,28 +286,28 @@ def train(cfg: dict):
           batch, batch_env_inds, batch_seq_inds = replay_buffer.sample(
               agent.batch_size, agent.horizon
           )
-          agent, train_info = agent.update(
+          agent, train_info = agent.update_world_model(
               observations=batch['observation'],
               actions=batch['action'],
               rewards=batch['reward'],
               next_observations=batch['next_observation'],
               terminated=batch['terminated'],
               truncated=batch['truncated'],
-              expert_mean=batch['expert_mean'],
-              expert_std=batch['expert_std'],
-              update_policy=not pretrain,
               key=update_keys[iupdate]
           )
           total_num_updates += 1
 
           # Reanalyze
-          zs = train_info.pop('true_zs')
+          true_zs = train_info.pop('true_zs')
+          zs = train_info.pop('zs')
+          finished = train_info.pop('finished')
           if total_num_updates % bmpc_config.reanalyze_interval == 0:
+            total_reanalyze_steps += 1
+            rng, reanalyze_key = jax.random.split(rng)
             b = bmpc_config.reanalyze_batch_size
             h = bmpc_config.reanalyze_horizon
-            rng, reanalyze_key = jax.random.split(rng)
             _, plan_dist = agent.plan(
-                z=zs[:, :b, :],
+                z=true_zs[:, :b, :],
                 horizon=h,
                 prev_plan=(
                     jnp.zeros((b, h, agent.model.action_dim)),
@@ -315,15 +318,37 @@ def train(cfg: dict):
                 deterministic=True,
                 key=reanalyze_key
             )
+            reanalyze_mean = plan_dist[0][..., 0, :]
+            reanalyze_std = plan_dist[1][..., 0, :]
             # Update expert policy in buffer
             # Reshape for buffer: (T, B, A) -> (B, T, A)
-            expert_mean = np.swapaxes(plan_dist[0][..., 0, :], 0, 1)
-            expert_std = np.swapaxes(plan_dist[1][..., 0, :], 0, 1)
-
             env_inds = batch_env_inds[:b, None]
             seq_inds = batch_seq_inds[:b]
-            replay_buffer.data['expert_mean'][seq_inds, env_inds] = expert_mean
-            replay_buffer.data['expert_std'][seq_inds, env_inds] = expert_std
+            replay_buffer.data['expert_mean'][seq_inds, env_inds] = np.swapaxes(
+                reanalyze_mean, 0, 1
+            )
+            replay_buffer.data['expert_std'][seq_inds, env_inds] = np.swapaxes(
+                reanalyze_std, 0, 1
+            )
+            replay_buffer.data['last_reanalyze'][seq_inds, env_inds] = total_reanalyze_steps
+            
+
+            # Update expert distribution in batch
+            batch['expert_mean'][:, :b, :] = reanalyze_mean
+            batch['expert_std'][:, :b, :] = reanalyze_std
+
+          # Update policy (using reanalyzed samples when possible)
+          if not pretrain:
+            rng, policy_key = jax.random.split(rng)
+            agent, policy_info = agent.update_policy(
+                zs=true_zs,
+                expert_mean=batch['expert_mean'],
+                expert_std=batch['expert_std'],
+                reanalyze_age=total_reanalyze_steps - batch['last_reanalyze'],
+                finished=finished,
+                key=policy_key
+            )
+            train_info.update(policy_info)
 
           if log_this_step:
             for k, v in train_info.items():

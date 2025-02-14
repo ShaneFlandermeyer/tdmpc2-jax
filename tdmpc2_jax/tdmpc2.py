@@ -264,17 +264,14 @@ class TDMPC2(struct.PyTreeNode):
     V = Vs.mean(axis=0)
     return G + discount * V
 
-  @partial(jax.jit, static_argnames=('update_policy'))
-  def update(self,
+  @jax.jit
+  def update_world_model(self,
              observations: PyTree,
              actions: jax.Array,
              rewards: jax.Array,
              next_observations: PyTree,
              terminated: jax.Array,
              truncated: jax.Array,
-             expert_mean: jax.Array,
-             expert_std: jax.Array,
-             update_policy: bool = True,
              *,
              key: PRNGKeyArray
              ) -> Tuple[TDMPC2, Dict[str, Any]]:
@@ -383,7 +380,7 @@ class TDMPC2(struct.PyTreeNode):
       }
 
     # Update world model
-    (encoder_grads, dynamics_grads, value_grads, reward_grads, continue_grads), model_info = jax.grad(
+    (encoder_grads, dynamics_grads, value_grads, reward_grads, continue_grads), info = jax.grad(
         world_model_loss_fn, argnums=(0, 1, 2, 3, 4), has_aux=True)(
             self.model.encoder.params,
             self.model.dynamics_model.params,
@@ -415,46 +412,6 @@ class TDMPC2(struct.PyTreeNode):
     else:
       new_continue_model = self.model.continue_model
 
-    # Update policy
-    zs = model_info.pop('zs')
-    finished = model_info.pop('finished')
-
-    def policy_loss_fn(actor_params: flax.core.FrozenDict):
-      actions, mean, log_std, log_probs = self.model.sample_actions(
-          zs[:-1], actor_params, key=policy_key
-      )
-
-      # Compute KL divergence between policy and expert
-      action_dist = tfd.MultivariateNormalDiag(mean, jnp.exp(log_std))
-      expert_dist = tfd.MultivariateNormalDiag(expert_mean, expert_std)
-      kl_div = tfd.kl_divergence(action_dist, expert_dist)
-      scale = percentile_normalization(
-          kl_div.mean(axis=0), self.scale
-      ).clip(1, None)
-      policy_loss = jnp.mean(
-          self.rho**jnp.arange(self.horizon)[:, None] *
-          (self.entropy_coef * log_probs + kl_div / sg(scale)),
-          where=~finished[:-1]
-      )
-
-      return policy_loss, {
-          'policy_loss': policy_loss,
-          'policy_scale': scale,
-          'entropy': -log_probs.mean()
-      }
-
-    if update_policy:
-      policy_grads, policy_info = jax.grad(policy_loss_fn, has_aux=True)(
-          self.model.policy_model.params
-      )
-      new_policy = self.model.policy_model.apply_gradients(grads=policy_grads)
-      policy_scale = policy_info['policy_scale']
-      info = {**model_info, **policy_info}
-    else:
-      new_policy = self.model.policy_model
-      policy_scale = self.scale
-      info = model_info
-
     # Update model
     new_agent = self.replace(
         model=self.model.replace(
@@ -462,11 +419,11 @@ class TDMPC2(struct.PyTreeNode):
             dynamics_model=new_dynamics_model,
             reward_model=new_reward_model,
             value_model=new_value_model,
-            policy_model=new_policy,
+            # policy_model=new_policy,
             target_value_model=new_target_value_model,
             continue_model=new_continue_model
         ),
-        scale=policy_scale
+        # scale=policy_scale
     )
     return new_agent, info
 
@@ -502,3 +459,49 @@ class TDMPC2(struct.PyTreeNode):
     V = Vs[inds].mean(axis=0)
     td_targets = Gs + discount * V
     return td_targets
+
+  @jax.jit
+  def update_policy(self,
+                    zs: jax.Array,
+                    expert_mean: jax.Array,
+                    expert_std: jax.Array,
+                    reanalyze_age: jax.Array,
+                    finished: jax.Array,
+                    key: PRNGKeyArray
+                    ):
+    def policy_loss_fn(actor_params: flax.core.FrozenDict):
+      _, mean, log_std, log_probs = self.model.sample_actions(
+          zs, actor_params, key=key
+      )
+
+      # Compute KL divergence between policy and expert
+      action_dist = tfd.MultivariateNormalDiag(mean, jnp.exp(log_std))
+      expert_dist = tfd.MultivariateNormalDiag(expert_mean, expert_std)
+      kl_div = tfd.kl_divergence(action_dist, expert_dist)
+      policy_scale = percentile_normalization(
+          kl_div.mean(axis=0), self.scale
+      ).clip(1, None)
+      
+      reanalyze_scale = 0.99**reanalyze_age
+      policy_loss = jnp.mean(
+          reanalyze_scale * 
+        #   self.rho**jnp.arange(self.horizon)[:, None] *
+          (self.entropy_coef * log_probs + kl_div / sg(policy_scale)),
+          where=~finished[:-1]
+      )
+
+      return policy_loss, {
+          'policy_loss': policy_loss,
+          'policy_scale': policy_scale,
+          'entropy': -log_probs.mean()
+      }
+    policy_grads, policy_info = jax.grad(policy_loss_fn, has_aux=True)(
+        self.model.policy_model.params
+    )
+    new_policy = self.model.policy_model.apply_gradients(grads=policy_grads)
+    
+    new_agent = self.replace(
+        model=self.model.replace(policy_model=new_policy),
+        scale=policy_info['policy_scale']
+    )
+    return new_agent, policy_info
