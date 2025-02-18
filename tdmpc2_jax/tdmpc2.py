@@ -346,7 +346,7 @@ class TDMPC2(struct.PyTreeNode):
       ###########################################################
       if self.model.predict_continues:
         continue_logits = self.model.continue_model.apply_fn(
-            {'params': continue_params}, zs[1:]
+            {'params': continue_params}, zs[:-1]
         ).squeeze(-1)
         continue_loss = optax.sigmoid_binary_cross_entropy(
             continue_logits, 1 - terminated
@@ -428,14 +428,14 @@ class TDMPC2(struct.PyTreeNode):
                 key: PRNGKeyArray
                 ) -> jax.Array:
     key, *action_keys = jax.random.split(key, 1+num_td_steps)
-    Gs, discount = 0, 1
+    G, discount = 0, 1
     for t in range(num_td_steps):
       action = self.model.sample_actions(
           z, self.model.policy_model.params, key=action_keys[t]
       )[0]
       reward, _ = self.model.reward(z, action, self.model.reward_model.params)
       z = self.model.next(z, action, self.model.dynamics_model.params)
-      Gs += discount * reward
+      G += discount * reward
       discount *= self.discount
       
       if self.model.predict_continues:
@@ -458,7 +458,7 @@ class TDMPC2(struct.PyTreeNode):
         replace=False
     )
     V = Vs[inds].mean(axis=0)
-    td_target = Gs + discount * V
+    td_target = G + discount * V
     return td_target
 
   @jax.jit
@@ -467,6 +467,7 @@ class TDMPC2(struct.PyTreeNode):
                     expert_mean: jax.Array,
                     expert_std: jax.Array,
                     reanalyze_age: jax.Array,
+                    reanalyze_discount: float,
                     key: PRNGKeyArray
                     ):
     def policy_loss_fn(actor_params: flax.core.FrozenDict):
@@ -482,7 +483,7 @@ class TDMPC2(struct.PyTreeNode):
           kl_div.mean(axis=0), self.scale
       ).clip(1, None)
 
-      reanalyze_scale = 0.99**reanalyze_age
+      reanalyze_scale = reanalyze_discount**reanalyze_age
       policy_loss = jnp.mean(
           reanalyze_scale *
           (self.entropy_coef * log_probs + kl_div / sg(policy_scale)),

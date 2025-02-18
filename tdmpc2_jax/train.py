@@ -343,6 +343,7 @@ def train(cfg: dict):
                 expert_mean=batch['expert_mean'],
                 expert_std=batch['expert_std'],
                 reanalyze_age=total_reanalyze_steps - batch['last_reanalyze'],
+                reanalyze_discount=bmpc_config.reanalyze_discount,
                 key=policy_key
             )
             train_info.update(policy_info)
