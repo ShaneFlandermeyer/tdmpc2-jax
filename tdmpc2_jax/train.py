@@ -299,8 +299,6 @@ def train(cfg: dict):
 
           # Reanalyze
           true_zs = train_info.pop('true_zs')
-          zs = train_info.pop('zs')
-          finished = train_info.pop('finished')
           if total_num_updates % bmpc_config.reanalyze_interval == 0:
             total_reanalyze_steps += 1
             rng, reanalyze_key = jax.random.split(rng)
@@ -331,22 +329,26 @@ def train(cfg: dict):
             replay_buffer.data['last_reanalyze'][seq_inds, env_inds] = \
                 total_reanalyze_steps
 
-            # Update expert distribution in batch
-            batch['expert_mean'][:, :b, :] = reanalyze_mean
-            batch['expert_std'][:, :b, :] = reanalyze_std
+            # Update policy with reanalyzed samples
+            if not pretrain:
+              # Linearly increase BMPC discount over training
+              bmpc_discount = bmpc_config.min_discount + \
+                  (global_step / cfg.max_steps) * \
+                  (bmpc_config.max_discount - bmpc_config.min_discount)
+              reanalyze_age = total_reanalyze_steps - batch['last_reanalyze']
+              bmpc_scale = bmpc_discount**reanalyze_age
 
-          # Update policy (using reanalyzed samples when possible)
-          if not pretrain:
-            rng, policy_key = jax.random.split(rng)
-            agent, policy_info = agent.update_policy(
-                zs=true_zs,
-                expert_mean=batch['expert_mean'],
-                expert_std=batch['expert_std'],
-                reanalyze_age=total_reanalyze_steps - batch['last_reanalyze'],
-                reanalyze_discount=bmpc_config.reanalyze_discount,
-                key=policy_key
-            )
-            train_info.update(policy_info)
+              batch['expert_mean'][:, :b, :] = reanalyze_mean
+              batch['expert_std'][:, :b, :] = reanalyze_std
+              rng, policy_key = jax.random.split(rng)
+              agent, policy_info = agent.update_policy(
+                  zs=true_zs,
+                  expert_mean=batch['expert_mean'],
+                  expert_std=batch['expert_std'],
+                  bmpc_scale=bmpc_scale,
+                  key=policy_key
+              )
+              train_info.update(policy_info)
 
           if log_this_step:
             for k, v in train_info.items():

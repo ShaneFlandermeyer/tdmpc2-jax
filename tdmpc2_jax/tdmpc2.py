@@ -249,7 +249,7 @@ class TDMPC2(struct.PyTreeNode):
       )
       G += discount * reward
       discount *= self.discount
-      
+
       if self.model.predict_continues:
         continues = jax.nn.sigmoid(
             self.model.continue_model.apply_fn(
@@ -370,8 +370,6 @@ class TDMPC2(struct.PyTreeNode):
           'value_loss': value_loss,
           'continue_loss': continue_loss,
           'total_loss': total_loss,
-          'zs': zs,
-          'finished': finished,
           'true_zs': true_zs
       }
 
@@ -437,7 +435,7 @@ class TDMPC2(struct.PyTreeNode):
       z = self.model.next(z, action, self.model.dynamics_model.params)
       G += discount * reward
       discount *= self.discount
-      
+
       if self.model.predict_continues:
         continues = jax.nn.sigmoid(
             self.model.continue_model.apply_fn(
@@ -466,8 +464,7 @@ class TDMPC2(struct.PyTreeNode):
                     zs: jax.Array,
                     expert_mean: jax.Array,
                     expert_std: jax.Array,
-                    reanalyze_age: jax.Array,
-                    reanalyze_discount: float,
+                    bmpc_scale: jax.Array,
                     key: PRNGKeyArray
                     ):
     def policy_loss_fn(actor_params: flax.core.FrozenDict):
@@ -483,9 +480,8 @@ class TDMPC2(struct.PyTreeNode):
           kl_div.mean(axis=0), self.scale
       ).clip(1, None)
 
-      reanalyze_scale = reanalyze_discount**reanalyze_age
       policy_loss = jnp.mean(
-          reanalyze_scale *
+          bmpc_scale *
           (self.entropy_coef * log_probs + kl_div / sg(policy_scale)),
       )
 
@@ -494,7 +490,7 @@ class TDMPC2(struct.PyTreeNode):
           'policy_scale': policy_scale,
           'entropy': -log_probs.mean()
       }
-      
+
     policy_grads, policy_info = jax.grad(policy_loss_fn, has_aux=True)(
         self.model.policy_model.params
     )
