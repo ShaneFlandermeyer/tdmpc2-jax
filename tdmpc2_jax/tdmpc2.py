@@ -89,7 +89,7 @@ class TDMPC2(struct.PyTreeNode):
   def act(self,
           obs: PyTree,
           prev_plan: Optional[Tuple[jax.Array, jax.Array]] = None,
-          train: bool = True,
+          deterministic: bool = True,
           *,
           key: PRNGKeyArray
           ) -> Tuple[np.ndarray, Optional[Tuple[jax.Array]]]:
@@ -97,20 +97,11 @@ class TDMPC2(struct.PyTreeNode):
     z = self.model.encode(obs, self.model.encoder.params, key=encoder_key)
 
     if self.mpc:
-      if prev_plan is None:
-        batch_dims = z.shape[:-1]
-        prev_plan = (
-            jnp.zeros((*batch_dims, self.horizon, self.model.action_dim)),
-            jnp.full(
-                (*batch_dims, self.horizon, self.model.action_dim),
-                self.max_plan_std
-            )
-        )
       action, plan = self.plan(
           z=z,
           horizon=self.horizon,
           prev_plan=prev_plan,
-          deterministic=not train,
+          deterministic=deterministic,
           key=action_key
       )
     else:
@@ -125,8 +116,8 @@ class TDMPC2(struct.PyTreeNode):
   def plan(self,
            z: jax.Array,
            horizon: int,
-           prev_plan: Tuple[jax.Array, jax.Array],
-           deterministic: bool,
+           prev_plan: Tuple[jax.Array, jax.Array] = None,
+           deterministic: bool = False,
            *,
            key: PRNGKeyArray,
            ) -> Tuple[jax.Array, Tuple[jax.Array, jax.Array]]:
@@ -193,8 +184,8 @@ class TDMPC2(struct.PyTreeNode):
     std = jnp.full(
         (*batch_shape, horizon, self.model.action_dim), self.max_plan_std
     )
-    mean = mean.at[..., :-1, :].set(prev_plan[0][..., 1:, :])
-    std = std.at[..., :-1, :].set(prev_plan[1][..., 1:, :])
+    if prev_plan is not None:
+      mean = mean.at[..., :-1, :].set(prev_plan[0][..., 1:, :])
 
     for i in range(self.mppi_iterations):
       actions = actions.at[..., self.policy_prior_samples:, :, :].set(

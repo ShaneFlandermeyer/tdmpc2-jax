@@ -201,7 +201,7 @@ def train(cfg: dict):
     ##############################
     ep_count = np.zeros(env_config.num_envs, dtype=int)
     prev_logged_step = global_step
-    prev_plan = None
+    plan = None
     observation, _ = env.reset(seed=cfg.seed)
 
     T = 500
@@ -218,15 +218,11 @@ def train(cfg: dict):
         expert_mean, expert_std = action, np.ones_like(action)
       else:
         rng, action_key = jax.random.split(rng)
-        if prev_plan is not None:
-          prev_plan = (
-              prev_plan[0], jnp.full_like(prev_plan[1], agent.max_plan_std)
-          )
-        action, prev_plan = agent.act(
-            observation, prev_plan=prev_plan, train=True, key=action_key
+        action, plan = agent.act(
+            observation, prev_plan=plan, deterministic=False, key=action_key
         )
-        expert_mean = prev_plan[0][..., 0, :]
-        expert_std = prev_plan[1][..., 0, :]
+        expert_mean = plan[0][..., 0, :]
+        expert_std = plan[1][..., 0, :]
 
       next_observation, reward, terminated, truncated, info = env.step(action)
 
@@ -250,10 +246,10 @@ def train(cfg: dict):
       # Handle terminations/truncations
       done = np.logical_or(terminated, truncated)
       if np.any(done):
-        if prev_plan is not None:
-          prev_plan = (
-              prev_plan[0].at[done].set(0),
-              prev_plan[1].at[done].set(agent.max_plan_std)
+        if plan is not None:
+          plan = (
+              plan[0].at[done].set(0),
+              plan[1].at[done].set(agent.max_plan_std)
           )
         for ienv in range(env_config.num_envs):
           if done[ienv]:
@@ -304,20 +300,14 @@ def train(cfg: dict):
             rng, reanalyze_key = jax.random.split(rng)
             b = bmpc_config.reanalyze_batch_size
             h = bmpc_config.reanalyze_horizon
-            _, plan_dist = agent.plan(
+            _, reanalyzed_plan = agent.plan(
                 z=true_zs[:, :b, :],
                 horizon=h,
-                prev_plan=(
-                    jnp.zeros((b, h, agent.model.action_dim)),
-                    jnp.full(
-                        (b, h, agent.model.action_dim), agent.max_plan_std
-                    )
-                ),
                 deterministic=True,
                 key=reanalyze_key
             )
-            reanalyze_mean = plan_dist[0][..., 0, :]
-            reanalyze_std = plan_dist[1][..., 0, :]
+            reanalyze_mean = reanalyzed_plan[0][..., 0, :]
+            reanalyze_std = reanalyzed_plan[1][..., 0, :]
             # Update expert policy in buffer
             # Reshape for buffer: (T, B, A) -> (B, T, A)
             env_inds = batch_env_inds[:b, None]
@@ -331,15 +321,10 @@ def train(cfg: dict):
 
             # Update policy with reanalyzed samples
             if not pretrain:
-              # Linearly increase BMPC discount over training
-              bmpc_discount = bmpc_config.min_discount + \
-                  (global_step / cfg.max_steps) * \
-                  (bmpc_config.max_discount - bmpc_config.min_discount)
-              reanalyze_age = total_reanalyze_steps - batch['last_reanalyze']
-              bmpc_scale = bmpc_discount**reanalyze_age
-
               batch['expert_mean'][:, :b, :] = reanalyze_mean
               batch['expert_std'][:, :b, :] = reanalyze_std
+              reanalyze_age = total_reanalyze_steps - batch['last_reanalyze']
+              bmpc_scale = bmpc_config.discount**reanalyze_age
               rng, policy_key = jax.random.split(rng)
               agent, policy_info = agent.update_policy(
                   zs=true_zs,

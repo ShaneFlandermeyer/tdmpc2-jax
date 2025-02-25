@@ -64,5 +64,4 @@ bmpc:
   reanalyze_interval: 10
   reanalyze_batch_size: 20
   reanalyze_horizon: 3
-  min_discount: 0.99
-  max_discount: 0.999
+  discount: 0.995
