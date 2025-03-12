@@ -279,8 +279,8 @@ def train(cfg: dict):
           prev_logged_step = global_step
 
         for iupdate in range(num_updates):
-          batch, batch_env_inds, batch_seq_inds = replay_buffer.sample(
-              agent.batch_size, agent.horizon
+          batch, batch_inds = replay_buffer.sample(
+              agent.batch_size, agent.horizon, return_inds=True
           )
           agent, train_info = agent.update_world_model(
               observations=batch['observation'],
@@ -310,8 +310,8 @@ def train(cfg: dict):
             reanalyze_std = reanalyzed_plan[1][..., 0, :]
             # Update expert policy in buffer
             # Reshape for buffer: (T, B, A) -> (B, T, A)
-            env_inds = batch_env_inds[:b, None]
-            seq_inds = batch_seq_inds[:b]
+            env_inds = batch_inds[0][:b, None]
+            seq_inds = batch_inds[1][:b]
             replay_buffer.data['expert_mean'][seq_inds, env_inds] = \
                 np.swapaxes(reanalyze_mean, 0, 1)
             replay_buffer.data['expert_std'][seq_inds, env_inds] = \
