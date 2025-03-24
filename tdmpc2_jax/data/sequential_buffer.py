@@ -156,7 +156,7 @@ class SequentialReplayBuffer():
         self.data
     )
 
-    return batch, (start_inds)
+    return batch, (sequence_inds)
 
   def _sample_vectorized(self, batch_size: int, sequence_length: int) -> PyTree:
     # Sample envs and start indices
