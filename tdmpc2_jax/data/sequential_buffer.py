@@ -94,7 +94,6 @@ class SequentialReplayBuffer():
     start_inds = self.np_random.integers(
         low=0, high=self.sizes[env_inds] - sequence_length,
         size=batch_size,
-        endpoint=True,
     )
     # Handle wrapping: For wrapped buffers, we define the current pointer index as 0 to avoid stepping into an unrelated trajectory
     start_inds = (
@@ -102,7 +101,9 @@ class SequentialReplayBuffer():
     ) % self.capacity
 
     # Sample from buffer and convert from (batch, time, *) to (time, batch, *)
-    sequence_inds = start_inds[:, None] + np.arange(sequence_length)
+    sequence_inds = (
+        start_inds[:, None] + np.arange(sequence_length)
+    ) % self.capacity
     batch = jax.tree.map(
         lambda x: np.swapaxes(x[sequence_inds, env_inds[:, None]], 0, 1),
         self.data
@@ -121,30 +122,4 @@ class SequentialReplayBuffer():
     self.current_inds = state['current_inds']
     self.sizes = state['sizes']
     self.data = state['data']
-
-
-if __name__ == '__main__':
-  # TODO: Make this a proper test
-  obs = np.ones((2, 4))
-  buffer = SequentialReplayBuffer(
-      capacity=5, num_envs=2, dummy_input=obs
-  )
-
-  obs = np.ones((2, 4))
-  buffer.insert(obs, env_mask=np.array([False, True]))
-
-  obs = np.full((2, 4), 2)
-  buffer.insert(obs, env_mask=np.array([True, True]))
-
-  obs = np.full((2, 4), 3)
-  buffer.insert(obs)
-
-  obs = np.full((2, 4), 4)
-  buffer.insert(obs)
-
-  obs = np.full((2, 4), 5)
-  buffer.insert(obs)
-
-  buffer.sample(4, 3)
-
-  pass
+    
