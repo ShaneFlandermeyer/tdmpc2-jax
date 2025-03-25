@@ -1,6 +1,6 @@
 import copy
 from functools import partial
-from typing import Dict, Tuple, Callable
+from typing import *
 import flax.linen as nn
 from flax.training.train_state import TrainState
 from flax import struct
@@ -259,7 +259,7 @@ class WorldModel(struct.PyTreeNode):
   def sample_actions(self,
                      z: jax.Array,
                      params: Dict,
-                     min_log_std: float = -3,
+                     min_log_std: float = -5,
                      max_log_std: float = 1,
                      *,
                      key: PRNGKeyArray
@@ -271,9 +271,10 @@ class WorldModel(struct.PyTreeNode):
     mean = jnp.tanh(mean)
     log_std = min_log_std + (max_log_std - min_log_std) * \
         0.5 * (jnp.tanh(log_std) + 1)
+    std = jnp.exp(log_std)
 
     # Sample action and compute logprobs
-    dist = tfd.MultivariateNormalDiag(loc=mean, scale_diag=jnp.exp(log_std))
+    dist = tfd.MultivariateNormalDiag(loc=mean, scale_diag=std)
     action = dist.sample(seed=key)
     log_probs = dist.log_prob(action)
 

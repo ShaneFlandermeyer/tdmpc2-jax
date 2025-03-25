@@ -215,7 +215,7 @@ def train(cfg: dict):
     for global_step in range(global_step, cfg.max_steps, env_config.num_envs):
       if global_step <= seed_steps:
         action = env.action_space.sample()
-        expert_mean, expert_std = action, np.ones_like(action)
+        expert_mean, expert_std = np.zeros_like(action), np.ones_like(action)
       else:
         rng, action_key = jax.random.split(rng)
         action, plan = agent.act(
@@ -237,7 +237,9 @@ def train(cfg: dict):
                 truncated=truncated,
                 expert_mean=expert_mean,
                 expert_std=expert_std,
-                last_reanalyze=np.zeros(env_config.num_envs, dtype=int),
+                last_reanalyze=np.full(
+                    env_config.num_envs, total_reanalyze_steps
+                ),
             ),
             env_mask=~done
         )
@@ -318,22 +320,22 @@ def train(cfg: dict):
                 np.swapaxes(reanalyze_std, 0, 1)
             replay_buffer.data['last_reanalyze'][seq_inds, env_inds] = \
                 total_reanalyze_steps
+            batch['expert_mean'][:, :b, :] = reanalyze_mean
+            batch['expert_std'][:, :b, :] = reanalyze_std
 
-            # Update policy with reanalyzed samples
-            if not pretrain:
-              batch['expert_mean'][:, :b, :] = reanalyze_mean
-              batch['expert_std'][:, :b, :] = reanalyze_std
-              reanalyze_age = total_reanalyze_steps - batch['last_reanalyze']
-              bmpc_scale = bmpc_config.discount**reanalyze_age
-              rng, policy_key = jax.random.split(rng)
-              agent, policy_info = agent.update_policy(
-                  zs=true_zs,
-                  expert_mean=batch['expert_mean'],
-                  expert_std=batch['expert_std'],
-                  bmpc_scale=bmpc_scale,
-                  key=policy_key
-              )
-              train_info.update(policy_info)
+          # Update policy with reanalyzed samples
+          if not pretrain:
+            reanalyze_age = total_reanalyze_steps - batch['last_reanalyze']
+            bmpc_scale = bmpc_config.discount**reanalyze_age
+            rng, policy_key = jax.random.split(rng)
+            agent, policy_info = agent.update_policy(
+                zs=true_zs,
+                expert_mean=batch['expert_mean'],
+                expert_std=batch['expert_std'],
+                bmpc_scale=bmpc_scale,
+                key=policy_key
+            )
+            train_info.update(policy_info)
 
           if log_this_step:
             for k, v in train_info.items():

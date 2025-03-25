@@ -18,7 +18,8 @@ from tensorflow_probability.substrates.jax import distributions as tfd
 
 class TDMPC2(struct.PyTreeNode):
   model: WorldModel
-  scale: jax.Array
+  kl_scale: jax.Array
+  value_scale: jax.Array
 
   # Planning
   mpc: bool
@@ -83,7 +84,8 @@ class TDMPC2(struct.PyTreeNode):
                continue_coef=continue_coef,
                entropy_coef=entropy_coef,
                tau=tau,
-               scale=jnp.array([1.0]),
+               kl_scale=jnp.array([1.0]),
+               value_scale=jnp.array([1.0])
                )
 
   def act(self,
@@ -148,7 +150,9 @@ class TDMPC2(struct.PyTreeNode):
       for t in range(horizon):
         policy_actions = policy_actions.at[..., t, :].set(
             self.model.sample_actions(
-                z_t, self.model.policy_model.params, key=prior_noise_keys[t]
+                z=z_t,
+                params=self.model.policy_model.params,
+                key=prior_noise_keys[t]
             )[0]
         )
         if t < horizon-1:  # Don't need for the last time step
@@ -202,7 +206,8 @@ class TDMPC2(struct.PyTreeNode):
       )
 
       # Update population distribution
-      score = jax.nn.softmax(elite_values)
+      temperature = 2  # TODO: Add to config
+      score = jax.nn.softmax(temperature * elite_values)
       mean = jnp.sum(score[..., None, None] * elite_actions, axis=-3)
       std = jnp.sqrt(
           jnp.sum(
@@ -458,27 +463,43 @@ class TDMPC2(struct.PyTreeNode):
                     bmpc_scale: jax.Array,
                     key: PRNGKeyArray
                     ):
+    action_key, V_key, next_V_key = jax.random.split(key, 3)
+
     def policy_loss_fn(actor_params: flax.core.FrozenDict):
-      _, mean, log_std, log_probs = self.model.sample_actions(
-          zs, actor_params, key=key
+      actions, mean, log_std, log_probs = self.model.sample_actions(
+          zs, actor_params, key=action_key
       )
+
+      # On-policy loss component
+      reward, _ = self.model.reward(
+          zs, actions, self.model.reward_model.params
+      )
+      next_z = self.model.next(zs, actions, self.model.dynamics_model.params)
+      next_Vs, _ = self.model.V(
+          next_z, self.model.value_model.params, key=next_V_key
+      )
+      next_V = next_Vs.mean(axis=0)
+      Q = reward + self.discount * next_V
+      value_scale = percentile_normalization(Q, self.value_scale).clip(1, None)
 
       # Compute KL divergence between policy and expert
       action_dist = tfd.MultivariateNormalDiag(mean, jnp.exp(log_std))
       expert_dist = tfd.MultivariateNormalDiag(expert_mean, expert_std)
       kl_div = tfd.kl_divergence(action_dist, expert_dist)
-      policy_scale = percentile_normalization(
-          kl_div.mean(axis=0), self.scale
+      kl_scale = percentile_normalization(
+          kl_div.mean(axis=0), self.kl_scale
       ).clip(1, None)
 
       policy_loss = jnp.mean(
-          bmpc_scale *
-          (self.entropy_coef * log_probs + kl_div / sg(policy_scale)),
+          self.entropy_coef * log_probs
+          + bmpc_scale * kl_div / sg(kl_scale)
+          - 0.1 * Q / sg(value_scale)
       )
 
       return policy_loss, {
           'policy_loss': policy_loss,
-          'policy_scale': policy_scale,
+          'kl_scale': kl_scale,
+          'value_scale': value_scale,
           'entropy': -log_probs.mean()
       }
 
@@ -489,6 +510,7 @@ class TDMPC2(struct.PyTreeNode):
 
     new_agent = self.replace(
         model=self.model.replace(policy_model=new_policy),
-        scale=policy_info['policy_scale']
+        kl_scale=policy_info['kl_scale'],
+        value_scale=policy_info['value_scale']
     )
     return new_agent, policy_info
