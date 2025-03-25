@@ -94,6 +94,7 @@ class SequentialReplayBuffer():
     start_inds = self.np_random.integers(
         low=0, high=self.sizes[env_inds] - sequence_length,
         size=batch_size,
+        endpoint=True,
     )
     # Handle wrapping: For wrapped buffers, we define the current pointer index as 0 to avoid stepping into an unrelated trajectory
     start_inds = (
