@@ -121,7 +121,8 @@ def train(cfg: dict):
       dummy_action
   )
   replay_buffer = SequentialReplayBuffer(
-      capacity=cfg.max_steps//env_config.num_envs,
+      capacity=cfg.buffer_size,
+      vectorized=True,
       num_envs=env_config.num_envs,
       seed=cfg.seed,
       dummy_input=dict(

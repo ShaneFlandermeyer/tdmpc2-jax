@@ -6,6 +6,7 @@ hydra:
 
 seed: 0
 max_steps: 2_000_000
+buffer_size: 2_000_000
 save_interval_steps: 100000
 log_interval_steps: 10000
 
