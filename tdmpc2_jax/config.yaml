@@ -6,6 +6,7 @@ hydra:
 
 seed: 0
 max_steps: 2_000_000
+buffer_size: 2_000_000
 save_interval_steps: 100000
 log_interval_steps: 10000
 
@@ -49,6 +50,7 @@ tdmpc2:
   num_elites: 64
   min_plan_std: 0
   max_plan_std: 2
+  temperature: 1
   # Optimization
   batch_size: 256
   discount: 0.99
@@ -64,4 +66,4 @@ bmpc:
   reanalyze_interval: 10
   reanalyze_batch_size: 20
   reanalyze_horizon: 3
-  discount: 0.999
+  discount: 0.995

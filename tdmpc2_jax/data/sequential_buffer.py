@@ -23,7 +23,7 @@ class SequentialReplayBuffer():
     Parameters
     ----------
     capacity : int
-        Maximum number of transitions to store PER PARALLEL ENVIRONMENT
+        Maximum number of transitions to store in the overall buffer
     dummy_input : Dict
         Example input from the environment. Used to determine the shape and dtype of the data to store
     num_envs : int, optional
@@ -31,28 +31,23 @@ class SequentialReplayBuffer():
     seed : Optional[int], optional
         Seed for sampling, by default None
     """
-    self.capacity = capacity
+
     self.vectorized = vectorized
+    self.num_envs = num_envs
     if vectorized:
-      self.num_envs = num_envs
-    else:
-      assert num_envs == 1, "num_envs must be 1 for non-vectorized buffer"
-      self.num_envs = 1
-
-    self.data = jax.tree.map(
-        lambda x: np.zeros(
-            (capacity,) + np.asarray(x).shape, np.asarray(x).dtype
-        ), dummy_input
-    )
-
-    # Size and index counter for each environment buffer
-    if vectorized:
+      self.capacity = capacity // num_envs
       self.size = np.zeros(num_envs, dtype=int)
       self.current_ind = np.zeros(num_envs, dtype=int)
     else:
+      self.capacity = capacity
       self.size = 0
       self.current_ind = 0
 
+    self.data = jax.tree.map(
+        lambda x: np.zeros(
+            (self.capacity,) + np.asarray(x).shape, np.asarray(x).dtype
+        ), dummy_input
+    )
     self.np_random = np.random.default_rng(seed=seed)
 
   def insert(self,
@@ -73,34 +68,6 @@ class SequentialReplayBuffer():
       self._insert_vectorized(data, env_mask)
     else:
       self._insert(data)
-
-  def _insert(self, data: PyTree) -> None:
-    # Insert data for the specified envs
-    jax.tree.map(
-        lambda x, y: x.__setitem__(self.current_ind, y), self.data, data
-    )
-
-    # Update buffer state
-    self.current_ind = (self.current_ind + 1) % self.capacity
-    self.size = min(self.size + 1, self.capacity)
-
-  def _insert_vectorized(self,
-                         data: PyTree,
-                         env_mask: Optional[np.ndarray] = None
-                         ) -> None:
-    # Insert data for the specified envs
-    if env_mask is None:
-      env_mask = np.ones(self.num_envs, dtype=bool)
-
-    def masked_set(x, y):
-      x[self.current_ind, env_mask] = y[env_mask]
-    jax.tree.map(masked_set, self.data, data)
-
-    # Update buffer state
-    self.current_ind[env_mask] = (
-        self.current_ind[env_mask] + 1
-    ) % self.capacity
-    self.size[env_mask] = np.clip(self.size[env_mask] + 1, 0, self.capacity)
 
   def sample(
       self,
@@ -136,16 +103,24 @@ class SequentialReplayBuffer():
     else:
       return batch
 
+  def _insert(self, data: PyTree) -> None:
+    jax.tree.map(
+        lambda x, y: x.__setitem__(self.current_ind, y), self.data, data
+    )
+
+    # Update buffer state
+    self.current_ind = (self.current_ind + 1) % self.capacity
+    self.size = min(self.size + 1, self.capacity)
+
   def _sample(self, batch_size: int, sequence_length: int) -> PyTree:
     # Sample envs and start indices
     start_inds = self.np_random.integers(
         low=0, high=self.size - sequence_length,
         size=batch_size,
+        endpoint=True,
     )
-    # Handle wrapping: For wrapped buffers, we define the current pointer index as 0 to avoid stepping into an unrelated trajectory
-    start_inds = (
-        start_inds - (self.size - self.current_ind)
-    ) % self.capacity
+    # Handle wrapping: For wrapped buffers, we define the current pointer index as the start of the buffer to avoid stepping into invalid data
+    start_inds = (start_inds - (self.size - self.current_ind)) % self.capacity
 
     # Sample from buffer and convert from (batch, time, *) to (time, batch, *)
     sequence_inds = (
@@ -158,6 +133,24 @@ class SequentialReplayBuffer():
 
     return batch, (sequence_inds)
 
+  def _insert_vectorized(self,
+                         data: PyTree,
+                         env_mask: Optional[np.ndarray] = None
+                         ) -> None:
+    # Insert data for the specified envs
+    if env_mask is None:
+      env_mask = np.ones(self.num_envs, dtype=bool)
+
+    def masked_set(x, y):
+      x[self.current_ind, env_mask] = y[env_mask]
+    jax.tree.map(masked_set, self.data, data)
+
+    # Update buffer state
+    self.current_ind[env_mask] = (
+        self.current_ind[env_mask] + 1
+    ) % self.capacity
+    self.size[env_mask] = np.clip(self.size[env_mask] + 1, 0, self.capacity)
+
   def _sample_vectorized(self, batch_size: int, sequence_length: int) -> PyTree:
     # Sample envs and start indices
     env_inds = self.np_random.integers(
@@ -167,8 +160,9 @@ class SequentialReplayBuffer():
     start_inds = self.np_random.integers(
         low=0, high=self.size[env_inds] - sequence_length,
         size=batch_size,
+        endpoint=True,
     )
-    # Handle wrapping: For wrapped buffers, we define the current pointer index as 0 to avoid stepping into an unrelated trajectory
+    # Handle wrapping: For wrapped buffers, we define the current pointer index as the start of the buffer to avoid stepping into invalid data
     start_inds = (
         start_inds - (self.size[env_inds] - self.current_ind[env_inds])
     ) % self.capacity
@@ -183,6 +177,7 @@ class SequentialReplayBuffer():
     )
 
     return batch, (env_inds, sequence_inds)
+
 
   def get_state(self) -> Dict:
     return {

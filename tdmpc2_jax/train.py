@@ -122,7 +122,8 @@ def train(cfg: dict):
       dummy_action
   )
   replay_buffer = SequentialReplayBuffer(
-      capacity=cfg.max_steps//env_config.num_envs,
+      capacity=cfg.buffer_size,
+      vectorized=True,
       num_envs=env_config.num_envs,
       seed=cfg.seed,
       dummy_input=dict(
@@ -215,13 +216,15 @@ def train(cfg: dict):
     for global_step in range(global_step, cfg.max_steps, env_config.num_envs):
       if global_step <= seed_steps:
         action = env.action_space.sample()
-        expert_mean, expert_std = np.zeros_like(action), np.ones_like(action)
+        expert_mean, expert_std = np.zeros_like(action), np.full_like(
+            action, tdmpc_config.max_plan_std
+        )
       else:
         rng, action_key = jax.random.split(rng)
         action, plan = agent.act(
             observation, prev_plan=plan, deterministic=False, key=action_key
         )
-        expert_mean = plan[0][..., 0, :]
+        expert_mean = plan[2][..., 0, :]
         expert_std = plan[1][..., 0, :]
 
       next_observation, reward, terminated, truncated, info = env.step(action)
@@ -238,7 +241,7 @@ def train(cfg: dict):
                 expert_mean=expert_mean,
                 expert_std=expert_std,
                 last_reanalyze=np.full(
-                    env_config.num_envs, total_reanalyze_steps
+                    env_config.num_envs, total_reanalyze_steps, dtype=int
                 ),
             ),
             env_mask=~done

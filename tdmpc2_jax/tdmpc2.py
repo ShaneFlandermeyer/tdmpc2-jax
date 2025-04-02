@@ -30,6 +30,7 @@ class TDMPC2(struct.PyTreeNode):
   num_elites: int = struct.field(pytree_node=False)
   min_plan_std: float
   max_plan_std: float
+  temperature: float
 
   # Optimization
   batch_size: int = struct.field(pytree_node=False)
@@ -54,6 +55,7 @@ class TDMPC2(struct.PyTreeNode):
              num_elites: int,
              min_plan_std: float,
              max_plan_std: float,
+             temperature: float,
              # Optimization
              discount: float,
              batch_size: int,
@@ -75,6 +77,7 @@ class TDMPC2(struct.PyTreeNode):
                num_elites=num_elites,
                min_plan_std=min_plan_std,
                max_plan_std=max_plan_std,
+               temperature=temperature,
                discount=discount,
                batch_size=batch_size,
                rho=rho,
@@ -206,8 +209,7 @@ class TDMPC2(struct.PyTreeNode):
       )
 
       # Update population distribution
-      temperature = 2  # TODO: Add to config
-      score = jax.nn.softmax(temperature * elite_values)
+      score = jax.nn.softmax(self.temperature * elite_values)
       mean = jnp.sum(score[..., None, None] * elite_actions, axis=-3)
       std = jnp.sqrt(
           jnp.sum(
@@ -218,15 +220,21 @@ class TDMPC2(struct.PyTreeNode):
       ).clip(self.min_plan_std, self.max_plan_std)
 
     # Select final action
+    # Select final action using Gumbel sampling
+    key, gumbel_key = jax.random.split(key)
+    gumbels = jax.random.gumbel(gumbel_key, shape=elite_values.shape)
+    gumbel_scores = jnp.log(score) + gumbels
+    action_ind = jnp.argmax(gumbel_scores, axis=-1)
+    action = jnp.take_along_axis(elite_actions, action_ind[..., None, None, None], axis=-3)[..., 0, :, :]
+    
     if deterministic:
-      action = mean[..., 0, :]
+      final_action = action[..., 0, :]
     else:
       key, final_noise_key = jax.random.split(key)
-      action = mean[..., 0, :] + std[..., 0, :] * jax.random.normal(
+      final_action = action[..., 0, :] + std[..., 0, :] * jax.random.normal(
           final_noise_key, shape=batch_shape + (self.model.action_dim,)
-      )
-
-    return action.clip(-1, 1), (mean, std)
+      )    
+    return final_action.clip(-1, 1), (mean, std, action)
 
   @partial(jax.jit, static_argnames=('horizon'))
   def estimate_value(self,
@@ -463,24 +471,10 @@ class TDMPC2(struct.PyTreeNode):
                     bmpc_scale: jax.Array,
                     key: PRNGKeyArray
                     ):
-    action_key, V_key, next_V_key = jax.random.split(key, 3)
-
     def policy_loss_fn(actor_params: flax.core.FrozenDict):
       actions, mean, log_std, log_probs = self.model.sample_actions(
-          zs, actor_params, key=action_key
+          zs, actor_params, key=key
       )
-
-      # On-policy loss component
-      reward, _ = self.model.reward(
-          zs, actions, self.model.reward_model.params
-      )
-      next_z = self.model.next(zs, actions, self.model.dynamics_model.params)
-      next_Vs, _ = self.model.V(
-          next_z, self.model.value_model.params, key=next_V_key
-      )
-      next_V = next_Vs.mean(axis=0)
-      Q = reward + self.discount * next_V
-      value_scale = percentile_normalization(Q, self.value_scale).clip(1, None)
 
       # Compute KL divergence between policy and expert
       action_dist = tfd.MultivariateNormalDiag(mean, jnp.exp(log_std))
@@ -490,16 +484,14 @@ class TDMPC2(struct.PyTreeNode):
           kl_div.mean(axis=0), self.kl_scale
       ).clip(1, None)
 
+
       policy_loss = jnp.mean(
-          self.entropy_coef * log_probs
-          + bmpc_scale * kl_div / sg(kl_scale)
-          - 0.1 * Q / sg(value_scale)
+          bmpc_scale * (kl_div / sg(kl_scale) + self.entropy_coef * log_probs)
       )
 
       return policy_loss, {
           'policy_loss': policy_loss,
           'kl_scale': kl_scale,
-          'value_scale': value_scale,
           'entropy': -log_probs.mean()
       }
 
@@ -511,6 +503,5 @@ class TDMPC2(struct.PyTreeNode):
     new_agent = self.replace(
         model=self.model.replace(policy_model=new_policy),
         kl_scale=policy_info['kl_scale'],
-        value_scale=policy_info['value_scale']
     )
     return new_agent, policy_info
