@@ -49,6 +49,7 @@ def train(cfg: dict):
       env = gym.make(env_id)
       env = gym.wrappers.RescaleAction(env, min_action=-1, max_action=1)
       env = gym.wrappers.RecordEpisodeStatistics(env)
+      env = gym.wrappers.Autoreset(env)
       env.action_space.seed(seed)
       env.observation_space.seed(seed)
       return env
@@ -56,17 +57,25 @@ def train(cfg: dict):
     if env_config.backend == "gymnasium":
       return make_gym_env(env_config.env_id, seed)
     elif env_config.backend == "dmc":
-      _env = make_dmc_env(env_config.env_id, seed, env_config.dmc.obs_type)
-      env = gym.wrappers.RecordEpisodeStatistics(_env)
+      env = make_dmc_env(env_config.env_id, seed, env_config.dmc.obs_type)
+      env = gym.wrappers.RecordEpisodeStatistics(env)
+      env = gym.wrappers.Autoreset(env)
+      env.action_space.seed(seed)
+      env.observation_space.seed(seed)
       return env
-    raise ValueError("Environment not supported:", env_config)
+    else:
+      raise ValueError("Environment not supported:", env_config)
 
-  vector_env_cls = gym.vector.AsyncVectorEnv if env_config.asynchronous else gym.vector.SyncVectorEnv
+  if env_config.asynchronous:
+    vector_env_cls = gym.vector.AsyncVectorEnv
+  else:
+    vector_env_cls = gym.vector.SyncVectorEnv
   env = vector_env_cls(
       [
           partial(make_env, env_config, seed)
           for seed in range(cfg.seed, cfg.seed+env_config.num_envs)
-      ])
+      ]
+  )
   np.random.seed(cfg.seed)
   rng = jax.random.PRNGKey(cfg.seed)
 
@@ -75,30 +84,45 @@ def train(cfg: dict):
   ##############################
   dtype = jnp.dtype(model_config.dtype)
   rng, model_key, encoder_key = jax.random.split(rng, 3)
-  encoder_module = nn.Sequential([
-      NormedLinear(encoder_config.encoder_dim, activation=mish, dtype=dtype)
-      for _ in range(encoder_config.num_encoder_layers-1)] + [
-      NormedLinear(
-          model_config.latent_dim,
-          activation=partial(simnorm, simplex_dim=model_config.simnorm_dim),
-          dtype=dtype)
-  ])
+  encoder_module = nn.Sequential(
+      [
+          NormedLinear(
+              encoder_config.encoder_dim, activation=mish, dtype=dtype
+          )
+          for _ in range(encoder_config.num_encoder_layers-1)
+      ] + [
+          NormedLinear(
+              model_config.latent_dim,
+              activation=partial(
+                  simnorm, simplex_dim=model_config.simnorm_dim
+              ),
+              dtype=dtype
+          )
+      ]
+  )
 
   if encoder_config.tabulate:
     print("Encoder")
     print("--------------")
-    print(encoder_module.tabulate(jax.random.key(0),
-          env.observation_space.sample(), compute_flops=True))
+    print(
+        encoder_module.tabulate(
+            jax.random.key(0),
+            env.observation_space.sample(),
+            compute_flops=True
+        )
+    )
 
   ##############################
   # Replay buffer setup
   ##############################
   dummy_obs, _ = env.reset()
   dummy_action = env.action_space.sample()
-  dummy_next_obs, dummy_reward, dummy_term, dummy_trunc, _ = \
-      env.step(dummy_action)
+  dummy_next_obs, dummy_reward, dummy_term, dummy_trunc, _ = env.step(
+      dummy_action
+  )
   replay_buffer = SequentialReplayBuffer(
-      capacity=cfg.max_steps//env_config.num_envs,
+      capacity=cfg.buffer_size,
+      vectorized=True,
       num_envs=env_config.num_envs,
       seed=cfg.seed,
       dummy_input=dict(
@@ -107,7 +131,8 @@ def train(cfg: dict):
           reward=dummy_reward,
           next_observation=dummy_next_obs,
           terminated=dummy_term,
-          truncated=dummy_trunc)
+          truncated=dummy_trunc
+      )
   )
 
   encoder = TrainState.create(
@@ -117,13 +142,15 @@ def train(cfg: dict):
           optax.zero_nans(),
           optax.clip_by_global_norm(model_config.max_grad_norm),
           optax.adam(encoder_config.learning_rate),
-      ))
+      )
+  )
 
   model = WorldModel.create(
-      action_dim=np.prod(env.get_wrapper_attr('single_action_space').shape),
+      action_dim=np.prod(env.single_action_space.shape),
       encoder=encoder,
       **model_config,
-      key=model_key)
+      key=model_key
+  )
   if model.action_dim >= 20:
     tdmpc_config.mppi_iterations += 2
 
@@ -131,23 +158,26 @@ def train(cfg: dict):
   global_step = 0
 
   options = ocp.CheckpointManagerOptions(
-      max_to_keep=1, save_interval_steps=cfg['save_interval_steps'])
+      max_to_keep=1, save_interval_steps=cfg['save_interval_steps']
+  )
   checkpoint_path = os.path.join(output_dir, 'checkpoint')
   with ocp.CheckpointManager(
-      checkpoint_path, options=options, item_names=(
-          'agent', 'global_step', 'buffer_state')
+      checkpoint_path,
+      options=options,
+      item_names=('agent', 'global_step', 'buffer_state')
   ) as mngr:
     if mngr.latest_step() is not None:
       print('Checkpoint folder found, restoring from', mngr.latest_step())
       abstract_buffer_state = jax.tree.map(
           ocp.utils.to_shape_dtype_struct, replay_buffer.get_state()
       )
-      restored = mngr.restore(mngr.latest_step(),
-                              args=ocp.args.Composite(
-          agent=ocp.args.StandardRestore(agent),
-          global_step=ocp.args.JsonRestore(),
-          buffer_state=ocp.args.StandardRestore(abstract_buffer_state),
-      )
+      restored = mngr.restore(
+          mngr.latest_step(),
+          args=ocp.args.Composite(
+              agent=ocp.args.StandardRestore(agent),
+              global_step=ocp.args.JsonRestore(),
+              buffer_state=ocp.args.StandardRestore(abstract_buffer_state),
+          )
       )
       agent, global_step = restored.agent, restored.global_step
       replay_buffer.restore(restored.buffer_state)
@@ -166,64 +196,64 @@ def train(cfg: dict):
     ##############################
     # Training loop
     ##############################
-    ep_info = {}
     ep_count = np.zeros(env_config.num_envs, dtype=int)
     prev_logged_step = global_step
-    prev_plan = (
-        jnp.zeros((env_config.num_envs, agent.horizon, agent.model.action_dim)),
-        jnp.full((env_config.num_envs, agent.horizon,
-                  agent.model.action_dim), agent.max_plan_std)
-    )
+    prev_plan = None
     observation, _ = env.reset(seed=cfg.seed)
 
     T = 500
-    seed_steps = int(max(5*T, 1000) * env_config.num_envs *
-                     env_config.utd_ratio)
+    seed_steps = int(
+        max(5*T, 1000) * env_config.num_envs * env_config.utd_ratio
+    )
     pbar = tqdm.tqdm(initial=global_step, total=cfg.max_steps)
+    done = np.zeros(env_config.num_envs, dtype=bool)
     for global_step in range(global_step, cfg.max_steps, env_config.num_envs):
       if global_step <= seed_steps:
         action = env.action_space.sample()
       else:
         rng, action_key = jax.random.split(rng)
-        prev_plan = (prev_plan[0],
-                     jnp.full_like(prev_plan[1], agent.max_plan_std))
+        if prev_plan is not None:
+          prev_plan = (
+              prev_plan[0], jnp.full_like(prev_plan[1], agent.max_plan_std)
+          )
         action, prev_plan = agent.act(
-            observation, prev_plan=prev_plan, train=True, key=action_key)
+            observation, prev_plan=prev_plan, train=True, key=action_key
+        )
 
       next_observation, reward, terminated, truncated, info = env.step(action)
 
-      # Get real final observation and store transition
-      real_next_observation = next_observation.copy()
-      for ienv, trunc in enumerate(truncated):
-        if trunc:
-          real_next_observation[ienv] = info['final_observation'][ienv]
-      replay_buffer.insert(dict(
-          observation=observation,
-          action=action,
-          reward=reward,
-          next_observation=real_next_observation,
-          terminated=terminated,
-          truncated=truncated))
+      if np.any(~done):
+        replay_buffer.insert(
+            dict(
+                observation=observation,
+                action=action,
+                reward=reward,
+                next_observation=next_observation,
+                terminated=terminated,
+                truncated=truncated
+            ),
+            env_mask=~done
+        )
       observation = next_observation
 
       # Handle terminations/truncations
       done = np.logical_or(terminated, truncated)
       if np.any(done):
-        prev_plan = (
-            prev_plan[0].at[done].set(0),
-            prev_plan[1].at[done].set(agent.max_plan_std)
-        )
-      if "final_info" in info:
-        for ienv, final_info in enumerate(info["final_info"]):
-          if final_info is None:
-            continue
-          print(
-              f"Episode {ep_count[ienv]}: {final_info['episode']['r'][0]:.2f}, {final_info['episode']['l'][0]}")
-          writer.scalar(f'episode/return',
-                        final_info['episode']['r'], global_step + ienv)
-          writer.scalar(f'episode/length',
-                        final_info['episode']['l'], global_step + ienv)
-          ep_count[ienv] += 1
+        if prev_plan is not None:
+          prev_plan = (
+              prev_plan[0].at[done].set(0),
+              prev_plan[1].at[done].set(agent.max_plan_std)
+          )
+        for ienv in range(env_config.num_envs):
+          if done[ienv]:
+            r = info['episode']['r'][ienv]
+            l = info['episode']['l'][ienv]
+            print(
+                f"Episode {ep_count[ienv]}: r = {r:.2f}, l = {l}"
+            )
+            writer.scalar(f'episode/return', r, global_step + ienv)
+            writer.scalar(f'episode/length', l, global_step + ienv)
+            ep_count[ienv] += 1
 
       if global_step >= seed_steps:
         if global_step == seed_steps:
@@ -248,7 +278,8 @@ def train(cfg: dict):
               next_observations=batch['next_observation'],
               terminated=batch['terminated'],
               truncated=batch['truncated'],
-              key=update_keys[iupdate])
+              key=update_keys[iupdate]
+          )
 
           if log_this_step:
             for k, v in train_info.items():

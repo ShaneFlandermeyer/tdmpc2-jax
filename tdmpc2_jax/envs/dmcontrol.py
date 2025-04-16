@@ -118,7 +118,7 @@ class ExtendedTimeStepWrapper(dm_env.Environment):
 		return getattr(self._env, name)
 
 
-class TimeStepToGymWrapper:
+class TimeStepToGymWrapper(gym.Env):
 	def __init__(self, env, domain, task):
 		obs_shp = []
 		for v in env.observation_spec().values():
@@ -149,6 +149,7 @@ class TimeStepToGymWrapper:
 		self.task = task
 		self.max_episode_steps = 500
 		self.t = 0
+		self.render_mode = None
 	
 	@property
 	def unwrapped(self):
