@@ -212,10 +212,6 @@ def train(cfg: dict):
         action = env.action_space.sample()
       else:
         rng, action_key = jax.random.split(rng)
-        if prev_plan is not None:
-          prev_plan = (
-              prev_plan[0], jnp.full_like(prev_plan[1], agent.max_plan_std)
-          )
         action, prev_plan = agent.act(
             observation, prev_plan=prev_plan, train=True, key=action_key
         )
