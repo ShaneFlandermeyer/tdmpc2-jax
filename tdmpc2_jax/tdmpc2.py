@@ -218,20 +218,22 @@ class TDMPC2(struct.PyTreeNode):
       ).clip(self.min_plan_std, self.max_plan_std)
 
     # Select final action
-    key, final_action_key = jax.random.split(key)
-    action_ind = jax.random.categorical(
-        final_action_key, logits=elite_values, shape=batch_shape
-    )
+    key, gumbel_key = jax.random.split(key)
+    gumbels = jax.random.gumbel(gumbel_key, shape=elite_values.shape)
+    gumbel_scores = jnp.log(score) + gumbels
+    action_ind = jnp.argmax(gumbel_scores, axis=-1)
     action = jnp.take_along_axis(
-        elite_actions[..., 0, :], action_ind[..., None, None], axis=-2
-    ).squeeze(-2)
-    if train:
+        elite_actions, action_ind[..., None, None, None], axis=-3
+    ).squeeze(-3)
+
+    if not train:
+      final_action = action[..., 0, :]
+    else:
       key, final_noise_key = jax.random.split(key)
-      action += std[..., 0, :] * jax.random.normal(
+      final_action = action[..., 0, :] + std[..., 0, :] * jax.random.normal(
           final_noise_key, shape=batch_shape + (self.model.action_dim,)
       )
-
-    return action.clip(-1, 1), (mean, std)
+    return final_action.clip(-1, 1), (mean, std)
 
   @jax.jit
   def update(self,
