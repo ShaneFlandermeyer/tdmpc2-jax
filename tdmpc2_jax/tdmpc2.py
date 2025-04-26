@@ -28,7 +28,7 @@ class TDMPC2(struct.PyTreeNode):
   num_elites: int = struct.field(pytree_node=False)
   min_plan_std: float
   max_plan_std: float
-
+  temperature: float
   # Optimization
   batch_size: int = struct.field(pytree_node=False)
   discount: float
@@ -52,6 +52,7 @@ class TDMPC2(struct.PyTreeNode):
              num_elites: int,
              min_plan_std: float,
              max_plan_std: float,
+             temperature: float,
              # Optimization
              discount: float,
              batch_size: int,
@@ -73,6 +74,7 @@ class TDMPC2(struct.PyTreeNode):
                num_elites=num_elites,
                min_plan_std=min_plan_std,
                max_plan_std=max_plan_std,
+               temperature=temperature,
                discount=discount,
                batch_size=batch_size,
                rho=rho,
@@ -207,7 +209,7 @@ class TDMPC2(struct.PyTreeNode):
       )
 
       # Update population distribution
-      score = jax.nn.softmax(elite_values)
+      score = jax.nn.softmax(self.temperature * elite_values)
       mean = jnp.sum(score[..., None, None] * elite_actions, axis=-3)
       std = jnp.sqrt(
           jnp.sum(
