@@ -18,7 +18,7 @@ setup(
       'optax',
       'jaxtyping',
       'einops',
-      'gymnasium[mujoco]'                     
+      'gymnasium[mujoco]==1.0.0'                     
     ],
 
 )

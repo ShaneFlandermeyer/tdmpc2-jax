@@ -28,7 +28,7 @@ class TDMPC2(struct.PyTreeNode):
   num_elites: int = struct.field(pytree_node=False)
   min_plan_std: float
   max_plan_std: float
-
+  temperature: float
   # Optimization
   batch_size: int = struct.field(pytree_node=False)
   discount: float
@@ -52,6 +52,7 @@ class TDMPC2(struct.PyTreeNode):
              num_elites: int,
              min_plan_std: float,
              max_plan_std: float,
+             temperature: float,
              # Optimization
              discount: float,
              batch_size: int,
@@ -73,6 +74,7 @@ class TDMPC2(struct.PyTreeNode):
                num_elites=num_elites,
                min_plan_std=min_plan_std,
                max_plan_std=max_plan_std,
+               temperature=temperature,
                discount=discount,
                batch_size=batch_size,
                rho=rho,
@@ -191,8 +193,8 @@ class TDMPC2(struct.PyTreeNode):
         (*batch_shape, self.horizon, self.model.action_dim),
         self.max_plan_std
     )
-    mean = mean.at[..., :-1, :].set(prev_plan[0][..., 1:, :])
-    std = std.at[..., :-1, :].set(prev_plan[1][..., 1:, :])
+    if prev_plan is not None:
+      mean = mean.at[..., :-1, :].set(prev_plan[0][..., 1:, :])
 
     for i in range(self.mppi_iterations):
       actions = actions.at[..., self.policy_prior_samples:, :, :].set(
@@ -207,7 +209,7 @@ class TDMPC2(struct.PyTreeNode):
       )
 
       # Update population distribution
-      score = jax.nn.softmax(elite_values)
+      score = jax.nn.softmax(self.temperature * elite_values)
       mean = jnp.sum(score[..., None, None] * elite_actions, axis=-3)
       std = jnp.sqrt(
           jnp.sum(
@@ -218,20 +220,22 @@ class TDMPC2(struct.PyTreeNode):
       ).clip(self.min_plan_std, self.max_plan_std)
 
     # Select final action
-    key, final_action_key = jax.random.split(key)
-    action_ind = jax.random.categorical(
-        final_action_key, logits=elite_values, shape=batch_shape
-    )
+    key, gumbel_key = jax.random.split(key)
+    gumbels = jax.random.gumbel(gumbel_key, shape=elite_values.shape)
+    gumbel_scores = jnp.log(score) + gumbels
+    action_ind = jnp.argmax(gumbel_scores, axis=-1)
     action = jnp.take_along_axis(
-        elite_actions[..., 0, :], action_ind[..., None, None], axis=-2
-    ).squeeze(-2)
-    if train:
+        elite_actions, action_ind[..., None, None, None], axis=-3
+    ).squeeze(-3)
+
+    if not train:
+      final_action = action[..., 0, :]
+    else:
       key, final_noise_key = jax.random.split(key)
-      action += std[..., 0, :] * jax.random.normal(
+      final_action = action[..., 0, :] + std[..., 0, :] * jax.random.normal(
           final_noise_key, shape=batch_shape + (self.model.action_dim,)
       )
-
-    return action.clip(-1, 1), (mean, std)
+    return final_action.clip(-1, 1), (mean, std)
 
   @jax.jit
   def update(self,

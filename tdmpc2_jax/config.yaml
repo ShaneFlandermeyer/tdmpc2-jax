@@ -50,6 +50,7 @@ tdmpc2:
   num_elites: 64
   min_plan_std: 0.05
   max_plan_std: 2
+  temperature: 1.0
   # Optimization
   batch_size: 256
   discount: 0.99
