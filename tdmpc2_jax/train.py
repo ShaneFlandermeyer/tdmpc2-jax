@@ -92,11 +92,7 @@ def train(cfg: dict):
           for _ in range(encoder_config.num_encoder_layers-1)
       ] + [
           NormedLinear(
-              model_config.latent_dim,
-              activation=partial(
-                  simnorm, simplex_dim=model_config.simnorm_dim
-              ),
-              dtype=dtype
+              model_config.latent_dim, activation=None, dtype=dtype
           )
       ]
   )
@@ -198,7 +194,7 @@ def train(cfg: dict):
     ##############################
     ep_count = np.zeros(env_config.num_envs, dtype=int)
     prev_logged_step = global_step
-    prev_plan = None
+    plan = None
     observation, _ = env.reset(seed=cfg.seed)
 
     T = 500
@@ -212,8 +208,12 @@ def train(cfg: dict):
         action = env.action_space.sample()
       else:
         rng, action_key = jax.random.split(rng)
-        action, prev_plan = agent.act(
-            observation, prev_plan=prev_plan, train=True, key=action_key
+        action, plan = agent.act(
+            observation,
+            prev_plan=plan,
+            deterministic=False,
+            train=True,
+            key=action_key
         )
 
       next_observation, reward, terminated, truncated, info = env.step(action)
@@ -235,10 +235,10 @@ def train(cfg: dict):
       # Handle terminations/truncations
       done = np.logical_or(terminated, truncated)
       if np.any(done):
-        if prev_plan is not None:
-          prev_plan = (
-              prev_plan[0].at[done].set(0),
-              prev_plan[1].at[done].set(agent.max_plan_std)
+        if plan is not None:
+          plan = (
+              plan[0].at[done].set(0),
+              plan[1].at[done].set(agent.max_plan_std)
           )
         for ienv in range(env_config.num_envs):
           if done[ienv]:

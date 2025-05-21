@@ -29,6 +29,7 @@ class WorldModel(struct.PyTreeNode):
   action_dim: int = struct.field(pytree_node=False)
   # Architecture
   latent_dim: int = struct.field(pytree_node=False)
+  simnorm_dim: int = struct.field(pytree_node=False)
   num_value_nets: int = struct.field(pytree_node=False)
   num_bins: int = struct.field(pytree_node=False)
   symlog_min: float
@@ -69,8 +70,7 @@ class WorldModel(struct.PyTreeNode):
     dynamics_module = nn.Sequential([
         NormedLinear(latent_dim, activation=mish, dtype=dtype),
         NormedLinear(latent_dim, activation=mish, dtype=dtype),
-        NormedLinear(latent_dim, activation=partial(
-            simnorm, simplex_dim=simnorm_dim), dtype=dtype)
+        NormedLinear(latent_dim, activation=None, dtype=dtype)
     ])
     dynamics_model = TrainState.create(
         apply_fn=dynamics_module.apply,
@@ -223,6 +223,7 @@ class WorldModel(struct.PyTreeNode):
         continue_model=continue_model,
         # Architecture
         latent_dim=latent_dim,
+        simnorm_dim=simnorm_dim,
         num_value_nets=num_value_nets,
         num_bins=num_bins,
         symlog_min=float(symlog_min),
@@ -235,12 +236,15 @@ class WorldModel(struct.PyTreeNode):
   def encode(self, obs: np.ndarray, params: Dict, key: PRNGKeyArray) -> jax.Array:
     if self.symlog_obs:
       obs = jax.tree.map(lambda x: symlog(x), obs)
-    return self.encoder.apply_fn({'params': params}, obs, rngs={'dropout': key})
+    z = self.encoder.apply_fn({'params': params}, obs, rngs={'dropout': key})
+    return simnorm(z, simplex_dim=self.simnorm_dim)
 
   @jax.jit
   def next(self, z: jax.Array, a: jax.Array, params: Dict) -> jax.Array:
-    z = jnp.concatenate([z, a], axis=-1)
-    return self.dynamics_model.apply_fn({'params': params}, z)
+    z = self.dynamics_model.apply_fn(
+        {'params': params}, jnp.concatenate([z, a], axis=-1)
+    )
+    return simnorm(z, simplex_dim=self.simnorm_dim)
 
   @jax.jit
   def reward(self, z: jax.Array, a: jax.Array, params: Dict
