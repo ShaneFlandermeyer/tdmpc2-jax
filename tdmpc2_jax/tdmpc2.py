@@ -160,7 +160,6 @@ class TDMPC2(struct.PyTreeNode):
             self.model.sample_actions(
                 z=z_t,
                 params=self.model.policy_model.params,
-                std_scale=self.policy_std_scale,
                 key=prior_noise_keys[t]
             )[0]
         )
