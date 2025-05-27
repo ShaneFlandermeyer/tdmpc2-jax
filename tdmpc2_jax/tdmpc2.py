@@ -264,7 +264,7 @@ class TDMPC2(struct.PyTreeNode):
                             reward_params: flax.core.FrozenDict,
                             continue_params: flax.core.FrozenDict,
                             ) -> Tuple[jax.Array, Dict[str, Any]]:
-      encoder_key, value_key = jax.random.split(key, 2)
+      encoder_key, value_key = jax.random.split(world_model_key, 2)
 
       ###########################################################
       # Encoder forward pass
