@@ -160,6 +160,7 @@ class TDMPC2(struct.PyTreeNode):
             self.model.sample_actions(
                 z=z_t,
                 params=self.model.policy_model.params,
+                std_scale=self.policy_std_scale,
                 key=prior_noise_keys[t]
             )[0]
         )
@@ -222,34 +223,25 @@ class TDMPC2(struct.PyTreeNode):
           ) + 1e-6
       ).clip(self.min_plan_std, self.max_plan_std)
 
-    # Compute final action distribution
+    # Sample final action
     if deterministic:  # Use best trajectory
-      final_ind = jnp.argmax(elite_values, axis=-1)
+      action_ind = jnp.argmax(elite_values, axis=-1)
     else:  # Sample from elites
       key, final_mean_key = jax.random.split(key)
-      final_ind = jax.random.categorical(
+      action_ind = jax.random.categorical(
           final_mean_key, logits=jnp.log(score), shape=batch_shape
       )
-    final_mean = jnp.take_along_axis(
-        elite_actions, final_ind[..., None, None, None], axis=-3
+    action = jnp.take_along_axis(
+        elite_actions, action_ind[..., None, None, None], axis=-3
     ).squeeze(-3)
-    final_std = jnp.sqrt(
-        jnp.sum(
-            score[..., None, None] *
-            (elite_actions - final_mean[..., None, :, :])**2,
-            axis=-3
-        ) + 1e-6
-    )
-
-    # Sample final action
     if train:
       key, final_noise_key = jax.random.split(key)
-      final_action = final_mean[..., 0, :] + final_std[..., 0, :] * \
+      final_action = action[..., 0, :] + std[..., 0, :] * \
           jax.random.normal(
               final_noise_key, shape=batch_shape + (self.model.action_dim,)
       )
     else:
-      final_action = final_mean[..., 0, :]
+      final_action = action[..., 0, :]
 
     return final_action.clip(-1, 1), (mean, std)
 
