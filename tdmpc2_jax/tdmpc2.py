@@ -165,9 +165,9 @@ class TDMPC2(struct.PyTreeNode):
         )
         if t < horizon-1:  # Don't need for the last time step
           z_t = self.model.next(
-              z_t,
-              policy_actions[..., t, :],
-              self.model.dynamics_model.params
+              z=z_t,
+              a=policy_actions[..., t, :],
+              params=self.model.dynamics_model.params
           )
 
       actions = actions.at[..., :self.policy_prior_samples, :, :].set(
@@ -205,7 +205,9 @@ class TDMPC2(struct.PyTreeNode):
       ).clip(-1, 1)
 
       # Compute elites
-      values = self.estimate_value(z_t, actions, horizon, key=value_keys[i])
+      values = self.estimate_value(
+          z=z_t, actions=actions, horizon=horizon, key=value_keys[i]
+      )
       elite_values, elite_inds = jax.lax.top_k(values, self.num_elites)
       elite_actions = jnp.take_along_axis(
           actions, elite_inds[..., None, None], axis=-3
@@ -226,9 +228,9 @@ class TDMPC2(struct.PyTreeNode):
     if deterministic:  # Use best trajectory
       action_ind = jnp.argmax(elite_values, axis=-1)
     else:  # Sample from elites
-      key, final_mean_key = jax.random.split(key)
+      key, final_action_key = jax.random.split(key)
       action_ind = jax.random.categorical(
-          final_mean_key, logits=jnp.log(score), shape=batch_shape
+          final_action_key, logits=jnp.log(score), shape=batch_shape
       )
     action = jnp.take_along_axis(
         elite_actions, action_ind[..., None, None, None], axis=-3
@@ -418,20 +420,18 @@ class TDMPC2(struct.PyTreeNode):
     latent_zs = model_info.pop('latent_zs')
     finished = model_info.pop('finished')
 
-    def policy_loss_fn(actor_params: flax.core.FrozenDict,):
+    def policy_loss_fn(actor_params: flax.core.FrozenDict):
       action_key, Q_key = jax.random.split(policy_key, 2)
       actions, _, _, log_probs = self.model.sample_actions(
           z=latent_zs, params=actor_params, key=action_key
       )
 
-      # Compute Q-values
+      # Compute policy objective (equation 4)
       Qs, _ = self.model.Q(
           z=latent_zs, a=actions, params=new_value_model.params, key=Q_key
       )
       Q = Qs.mean(axis=0)
-      # Update and apply scale
       scale = percentile_normalization(Q[0], self.value_scale).clip(1, None)
-      # Compute policy objective (equation 4)
       policy_loss = jnp.mean(
           self.rho**jnp.arange(self.horizon+1)[:, None] *
           (self.entropy_coef * log_probs - Q / sg(scale)),
