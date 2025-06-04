@@ -346,7 +346,7 @@ class TDMPC2(struct.PyTreeNode):
           z=latent_zs[:-1], a=actions, params=value_params, key=value_key
       )
       value_loss = jnp.mean(
-          self.rho**np.arange(self.horizon) * soft_crossentropy(
+          self.rho**np.arange(self.horizon)[:, None] * soft_crossentropy(
               Q_logits, sg(td_targets),
               self.model.symlog_min,
               self.model.symlog_max,
