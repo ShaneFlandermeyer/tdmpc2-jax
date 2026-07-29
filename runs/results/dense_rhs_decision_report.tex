@@ -1,0 +1,633 @@
+\section{Dense-RHS Architecture Decision Report}
+
+\paragraph{Purpose.}
+This report records the complete Dense-RHS model-search trail: models trained, run artifacts, architectural changes, observed metrics, and the evidence that motivated each decision.
+
+\paragraph{Required evidence standard.}
+\begin{itemize}
+\item List every trained model and its final/best eval scores, runtime, horizon path, bucket path, outcome, and run directory.
+\item Name every algorithm/config change that was tested.
+\item For each architecture step, justify why it was introduced and what result/plot/metric motivated it.
+\item Reference summary plots for each run when available: artifacts/run\_summary\_grid.png and artifacts/run\_summary\_grid.pdf.
+\item Explain which plots/data led to continuing, cancelling, promoting, or abandoning each architecture variant.
+\item Keep the explanation readable and avoid unexplained launcher-only heuristic bundles.
+\end{itemize}
+
+\paragraph{All trained models and artifacts.}
+\begin{itemize}
+\item job 1960, label finger\_turn\_hard\_clean\_no\_rhs\_300k\_vec8\_s15, method no\_rhs, regime clean: final 980.5499877929688, best 980.5499877929688, runtime 00:56:55, horizon path , bucket path 3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/finger-turn\_hard\_clean\_no\_rhs\_finger\_turn\_hard\_clean\_no\_rhs\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/finger-turn\_hard\_clean\_no\_rhs\_finger\_turn\_hard\_clean\_no\_rhs\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1969, label finger\_turn\_hard\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime clean: final 927.25, best 963.8499755859375, runtime 01:11:50, horizon path 3->3->4->4->5, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->8->8->8->8. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/finger-turn\_hard\_dense\_rhs\_clean\_finger\_turn\_hard\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/finger-turn\_hard\_dense\_rhs\_clean\_finger\_turn\_hard\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1970, label cheetah\_run\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime clean: final 933.12890625, best 933.12890625, runtime 01:19:14, horizon path 4->5->6->6->6, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/cheetah-run\_dense\_rhs\_clean\_cheetah\_run\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/cheetah-run\_dense\_rhs\_clean\_cheetah\_run\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1179, label no\_rhs\_1179, method no\_rhs, regime clean: final 924.65, best 924.65, runtime 01:15:58, horizon path , bucket path . Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax/outputs/quadruped-run\_no\_rhs\_smoke\_parity\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax/outputs/quadruped-run\_no\_rhs\_smoke\_parity\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1663, label dense\_rhs\_plus2\_sparse\_hifi\_start70\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime clean: final 922.63330078125, best 922.63330078125, runtime 01:31:18, horizon path 3->3->3->3->3, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_sparse\_hifi\_start70\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_sparse\_hifi\_start70\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1709, label dense\_rhs\_plus2\_h34\_start120\_margin02\_300k\_vec8\_s15, method dense\_rhs\_h34\_late\_exploitation, regime clean: final 901.8836059570312, best 919.34619140625, runtime 01:24:34, horizon path 3->3->3->3, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_h34\_start120\_margin02\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_h34\_start120\_margin02\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1387, label dense\_rhs\_sparse\_hifi\_1387, method dense\_rhs\_sparse\_hifi, regime clean: final 915.34, best 915.34, runtime 01:29:59, horizon path 2->2->3->2->3->4, bucket path . Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_bucket\_hifi\_300k\_vec8\_s15\_start20k}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_bucket\_hifi\_300k\_vec8\_s15\_start20k/artifacts/run\_summary\_grid.pdf}.
+\item job 1717, label dense\_rhs\_plus2\_fullh\_learnerproxy\_start70\_300k\_vec8\_s15, method dense\_rhs\_full\_horizon\_learner\_proxy, regime clean: final 912.6260986328125, best 912.6260986328125, runtime 01:49:03, horizon path 3->5->7->7->9, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->12->12->12->12. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_fullh\_learnerproxy\_start70\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_fullh\_learnerproxy\_start70\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1702, label dense\_rhs\_plus2\_hcap4\_start120\_returnlite\_300k\_vec8\_s15, method dense\_rhs\_horizon\_trust\_region, regime clean: final 898.8212890625, best 908.4658203125, runtime 01:25:30, horizon path 3->3->4->3, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_hcap4\_start120\_returnlite\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_hcap4\_start120\_returnlite\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1693, label dense\_rhs\_plus2\_anchor\_start90\_margin06\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime clean: final 906.2188720703125, best 906.2188720703125, runtime 01:47:01, horizon path 3->4->4->5->4, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->8->8->8->8->8->8->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_anchor\_start90\_margin06\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_anchor\_start90\_margin06\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1710, label dense\_rhs\_plus2\_h34\_start160\_returndom\_300k\_vec8\_s15, method dense\_rhs\_h34\_late\_exploitation, regime clean: final 904.8642578125, best 904.8642578125, runtime 01:24:12, horizon path 4->4->4, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_h34\_start160\_returndom\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_h34\_start160\_returndom\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1662, label dense\_rhs\_plus2\_sparse\_hifi\_margin08\_300k\_vec8\_s15\_start20k, method dense\_rhs\_sparse\_hifi, regime clean: final 901.0157470703125, best 901.0157470703125, runtime 01:31:16, horizon path 2->2->3->4->4->4, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_sparse\_hifi\_margin08\_300k\_vec8\_s15\_start20k}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_sparse\_hifi\_margin08\_300k\_vec8\_s15\_start20k/artifacts/run\_summary\_grid.pdf}.
+\item job 1711, label dense\_rhs\_plus2\_h34\_ei\_start120\_300k\_vec8\_s15, method dense\_rhs\_h34\_late\_exploitation\_ei, regime clean: final 899.6385498046875, best 899.6385498046875, runtime 01:23:55, horizon path 3->3->3->3, bucket path 4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_h34\_ei\_start120\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_h34\_ei\_start120\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1692, label dense\_rhs\_plus2\_anchor\_start70\_margin10\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime clean: final 898.3875122070312, best 898.3875122070312, runtime 01:47:51, horizon path 4->3->4->5->5, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->8->8->8->8->8->8->8->8->8->8. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_anchor\_start70\_margin10\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_anchor\_start70\_margin10\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1701, label dense\_rhs\_plus2\_hcap4\_start70\_margin04\_300k\_vec8\_s15, method dense\_rhs\_horizon\_trust\_region, regime clean: final 896.6925048828125, best 896.6925048828125, runtime 01:25:44, horizon path 3->3->2->2->3, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_hcap4\_start70\_margin04\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_hcap4\_start70\_margin04\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1618, label dense\_rhs\_credible\_mid\_p56\_c003\_1618, method dense\_rhs\_credible\_mid\_p56\_c003, regime clean: final 516.52, best 894.1, runtime 01:38:32, horizon path 3->3->4->4->4->5, bucket path . Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_credible\_mid\_300k\_vec8\_s15\_p56\_c003\_start20k}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_credible\_mid\_300k\_vec8\_s15\_p56\_c003\_start20k/artifacts/run\_summary\_grid.pdf}.
+\item job 1600, label dense\_rhs\_credible\_p65\_c006\_1600, method dense\_rhs\_credible\_p65\_c006, regime clean: final 889.66, best 889.66, runtime 01:26:10, horizon path 3->3->3->3->3->3, bucket path . Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_credible\_hifi\_300k\_vec8\_s15\_p65\_c006\_start20k}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_credible\_hifi\_300k\_vec8\_s15\_p65\_c006\_start20k/artifacts/run\_summary\_grid.pdf}.
+\item job 1674, label dense\_rhs\_plus2\_evidence\_ultrahifi\_start70\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime clean: final 884.75537109375, best 884.75537109375, runtime 02:00:12, horizon path 3->4->5->5->6, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_evidence\_ultrahifi\_start70\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_evidence\_ultrahifi\_start70\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1971, label cartpole\_swingup\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime clean: final 882.39404296875, best 882.39404296875, runtime 01:10:34, horizon path 4->4->5->4->3, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->8->8->8->8->8->8->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/cartpole-swingup\_dense\_rhs\_clean\_cartpole\_swingup\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/cartpole-swingup\_dense\_rhs\_clean\_cartpole\_swingup\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1713, label dense\_rhs\_plus2\_fullh\_ei\_b9\_start70\_300k\_vec8\_s15, method dense\_rhs\_full\_horizon\_ei, regime clean: final 879.5133056640625, best 879.5133056640625, runtime 01:43:33, horizon path 5->7->7->7->7, bucket path 4->4->4->4->4->4->4->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_fullh\_ei\_b9\_start70\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_fullh\_ei\_b9\_start70\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1985, label cartpole\_swingup\_chaos\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime chaos: final 876.3756103515625, best 876.3756103515625, runtime 01:19:03, horizon path 3->3->3->2->3, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/cartpole-swingup\_dense\_rhs\_chaos\_cartpole\_swingup\_chaos\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/cartpole-swingup\_dense\_rhs\_chaos\_cartpole\_swingup\_chaos\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1962, label cheetah\_run\_clean\_no\_rhs\_300k\_vec8\_s15, method no\_rhs, regime clean: final 845.8548583984375, best 871.3776245117188, runtime 00:56:55, horizon path , bucket path 3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/cheetah-run\_clean\_no\_rhs\_cheetah\_run\_clean\_no\_rhs\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/cheetah-run\_clean\_no\_rhs\_cheetah\_run\_clean\_no\_rhs\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1963, label cartpole\_swingup\_clean\_no\_rhs\_300k\_vec8\_s15, method no\_rhs, regime clean: final 866.7747192382812, best 867.5153198242188, runtime 00:52:26, horizon path , bucket path 3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/cartpole-swingup\_clean\_no\_rhs\_cartpole\_swingup\_clean\_no\_rhs\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/cartpole-swingup\_clean\_no\_rhs\_cartpole\_swingup\_clean\_no\_rhs\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1708, label dense\_rhs\_plus2\_hcap4\_uplift\_start70\_300k\_vec8\_s15, method dense\_rhs\_deployment\_utility\_posterior, regime clean: final 863.4307861328125, best 863.4307861328125, runtime 01:24:33, horizon path 2->2->2->2->2, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_hcap4\_uplift\_start70\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_hcap4\_uplift\_start70\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1671, label dense\_rhs\_plus2\_sparse\_hifi\_start70\_returnlite\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime clean: final 855.7972412109375, best 855.7972412109375, runtime 01:35:10, horizon path 3->2->3->2->3, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_sparse\_hifi\_start70\_returnlite\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_sparse\_hifi\_start70\_returnlite\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1978, label cartpole\_swingup\_chaos\_no\_rhs\_300k\_vec8\_s15, method no\_rhs, regime chaos: final 855.3677978515625, best 855.3677978515625, runtime 01:10:06, horizon path , bucket path 3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/cartpole-swingup\_chaos\_no\_rhs\_cartpole\_swingup\_chaos\_no\_rhs\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/cartpole-swingup\_chaos\_no\_rhs\_cartpole\_swingup\_chaos\_no\_rhs\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1676, label dense\_rhs\_plus2\_evidence\_ultrahifi\_start20\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime clean: final 849.2491455078125, best 849.2491455078125, runtime 01:56:26, horizon path 3->3->4->5->5->4, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->8->8->8->8->8->8->8->8->8->8->8->8->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_evidence\_ultrahifi\_start20\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_evidence\_ultrahifi\_start20\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1966, label walker\_run\_clean\_no\_rhs\_300k\_vec8\_s15, method no\_rhs, regime clean: final 839.2001953125, best 839.2001953125, runtime 01:26:04, horizon path , bucket path 3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/walker-run\_clean\_no\_rhs\_walker\_run\_clean\_no\_rhs\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/walker-run\_clean\_no\_rhs\_walker\_run\_clean\_no\_rhs\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1712, label dense\_rhs\_plus2\_fullh\_all29\_start70\_300k\_vec8\_s15, method dense\_rhs\_full\_horizon\_evidence, regime clean: final 837.6513671875, best 837.6513671875, runtime 01:39:11, horizon path 4->3->5->5->7, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_fullh\_all29\_start70\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_fullh\_all29\_start70\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1973, label walker\_run\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime clean: final 835.9410400390625, best 835.9410400390625, runtime 01:38:25, horizon path 4->3->3->4->4, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/walker-run\_dense\_rhs\_clean\_walker\_run\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/walker-run\_dense\_rhs\_clean\_walker\_run\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1718, label dense\_rhs\_plus2\_fullh\_du\_learnerproxy\_start70\_300k\_vec8\_s15, method dense\_rhs\_full\_horizon\_utility\_learner\_proxy, regime clean: final 834.3712768554688, best 834.3712768554688, runtime 01:27:42, horizon path 3->4->4->4->4, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_fullh\_du\_learnerproxy\_start70\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_fullh\_du\_learnerproxy\_start70\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1670, label dense\_rhs\_plus2\_sparse\_hifi\_start120\_margin03\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime clean: final 831.63916015625, best 831.63916015625, runtime 01:34:51, horizon path 2->2->3->3, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_sparse\_hifi\_start120\_margin03\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_sparse\_hifi\_start120\_margin03\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1716, label dense\_rhs\_plus2\_fullh\_du\_start70\_300k\_vec8\_s15, method dense\_rhs\_full\_horizon\_deployment\_utility, regime clean: final 826.55810546875, best 826.55810546875, runtime 01:27:59, horizon path 2->2->2->2->2, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_fullh\_du\_start70\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_fullh\_du\_start70\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1675, label dense\_rhs\_plus2\_evidence\_ultrahifi\_returnlocal\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime clean: final 729.8106079101562, best 740.24560546875, runtime 02:07:45, horizon path 3->4->5->6->6, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8->8. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_evidence\_ultrahifi\_returnlocal\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_evidence\_ultrahifi\_returnlocal\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1976, label finger\_turn\_hard\_chaos\_no\_rhs\_300k\_vec8\_s15, method no\_rhs, regime chaos: final 713.4000244140625, best 713.4000244140625, runtime 01:13:09, horizon path , bucket path 3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/finger-turn\_hard\_chaos\_no\_rhs\_finger\_turn\_hard\_chaos\_no\_rhs\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/finger-turn\_hard\_chaos\_no\_rhs\_finger\_turn\_hard\_chaos\_no\_rhs\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1968, label fish\_swim\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime clean: final 596.9766845703125, best 708.2169189453125, runtime 01:03:36, horizon path 3->3->3->3->3, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/fish-swim\_dense\_rhs\_clean\_fish\_swim\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/fish-swim\_dense\_rhs\_clean\_fish\_swim\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1983, label finger\_turn\_hard\_chaos\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime chaos: final 688.5999755859375, best 688.5999755859375, runtime 01:24:19, horizon path 3->3->3->3->3, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/finger-turn\_hard\_dense\_rhs\_chaos\_finger\_turn\_hard\_chaos\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/finger-turn\_hard\_dense\_rhs\_chaos\_finger\_turn\_hard\_chaos\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1686, label dense\_rhs\_plus2\_shadowprobe\_w0p25\_120k\_vec8\_s15\_start20k, method dense\_rhs\_shadow\_probe, regime clean: final 684.2154541015625, best 684.2154541015625, runtime 00:48:44, horizon path 3->3, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_shadowprobe\_w0p25\_120k\_vec8\_s15\_start20k}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_shadowprobe\_w0p25\_120k\_vec8\_s15\_start20k/artifacts/run\_summary\_grid.pdf}.
+\item job 1181, label no\_rhs\_1181, method no\_rhs, regime chaos: final 683.0, best 683.0, runtime unknown, horizon path , bucket path . Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax/outputs/quadruped-run\_chaos\_no\_rhs\_parity\_300k\_vec8\_s15\_chaos}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax/outputs/quadruped-run\_chaos\_no\_rhs\_parity\_300k\_vec8\_s15\_chaos/artifacts/run\_summary\_grid.pdf}.
+\item job 1659, label dense\_rhs\_sparse\_hifi\_smoke\_120k\_vec8\_s15\_start20k, method dense\_rhs\_sparse\_hifi, regime clean: final 640.4043579101562, best 640.4043579101562, runtime 00:56:30, horizon path 2->2, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_sparse\_hifi\_smoke\_120k\_vec8\_s15\_start20k}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_sparse\_hifi\_smoke\_120k\_vec8\_s15\_start20k/artifacts/run\_summary\_grid.pdf}.
+\item job 1987, label walker\_run\_chaos\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime chaos: final 579.1027221679688, best 627.7696533203125, runtime 01:54:57, horizon path 3->3->3->4->4, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/walker-run\_dense\_rhs\_chaos\_walker\_run\_chaos\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/walker-run\_dense\_rhs\_chaos\_walker\_run\_chaos\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1810, label dense\_rhs\_winner\_chaos\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime chaos: final 614.44970703125, best 614.44970703125, runtime 01:48:24, horizon path 3->2->2->2->3, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_chaos\_dense\_rhs\_winner\_chaos\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_chaos\_dense\_rhs\_winner\_chaos\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1959, label fish\_swim\_clean\_no\_rhs\_300k\_vec8\_s15, method no\_rhs, regime clean: final 505.16326904296875, best 596.1466064453125, runtime 00:53:38, horizon path , bucket path 3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/fish-swim\_clean\_no\_rhs\_fish\_swim\_clean\_no\_rhs\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/fish-swim\_clean\_no\_rhs\_fish\_swim\_clean\_no\_rhs\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1980, label walker\_run\_chaos\_no\_rhs\_300k\_vec8\_s15, method no\_rhs, regime chaos: final 591.030029296875, best 591.030029296875, runtime 01:43:12, horizon path , bucket path 3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/walker-run\_chaos\_no\_rhs\_walker\_run\_chaos\_no\_rhs\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/walker-run\_chaos\_no\_rhs\_walker\_run\_chaos\_no\_rhs\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1715, label no\_rhs\_chaos\_parity\_300k\_vec8\_s15\_current, method no\_rhs, regime chaos: final 505.26690673828125, best 590.1742553710938, runtime 01:30:18, horizon path , bucket path 3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_chaos\_no\_rhs\_no\_rhs\_chaos\_parity\_300k\_vec8\_s15\_current}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_chaos\_no\_rhs\_no\_rhs\_chaos\_parity\_300k\_vec8\_s15\_current/artifacts/run\_summary\_grid.pdf}.
+\item job 1687, label dense\_rhs\_plus2\_shadowprobe\_w0p5\_120k\_vec8\_s15\_start20k, method dense\_rhs\_shadow\_probe, regime clean: final 578.2000732421875, best 578.2000732421875, runtime 00:47:00, horizon path 2->2, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_shadowprobe\_w0p5\_120k\_vec8\_s15\_start20k}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_shadowprobe\_w0p5\_120k\_vec8\_s15\_start20k/artifacts/run\_summary\_grid.pdf}.
+\item job 1972, label acrobot\_swingup\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime clean: final 362.320556640625, best 575.4118041992188, runtime 00:59:31, horizon path 3->3->3->3->3, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/acrobot-swingup\_dense\_rhs\_clean\_acrobot\_swingup\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/acrobot-swingup\_dense\_rhs\_clean\_acrobot\_swingup\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1964, label acrobot\_swingup\_clean\_no\_rhs\_300k\_vec8\_s15, method no\_rhs, regime clean: final 539.5477294921875, best 539.5477294921875, runtime 00:50:35, horizon path , bucket path 3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/acrobot-swingup\_clean\_no\_rhs\_acrobot\_swingup\_clean\_no\_rhs\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/acrobot-swingup\_clean\_no\_rhs\_acrobot\_swingup\_clean\_no\_rhs\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1984, label cheetah\_run\_chaos\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime chaos: final 491.46044921875, best 491.46044921875, runtime 01:31:02, horizon path 3->4->3->4->5, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->8->8->8->8. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/cheetah-run\_dense\_rhs\_chaos\_cheetah\_run\_chaos\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/cheetah-run\_dense\_rhs\_chaos\_cheetah\_run\_chaos\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1658, label dense\_rhs\_ei\_smoke\_80k\_vec8\_s15\_risk10\_c002\_min010\_start20k, method dense\_rhs\_expected\_improvement, regime clean: final 463.6806945800781, best 463.6806945800781, runtime 00:43:00, horizon path 3->3->3, bucket path 4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_ei\_smoke\_80k\_vec8\_s15\_risk10\_c002\_min010\_start20k}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_ei\_smoke\_80k\_vec8\_s15\_risk10\_c002\_min010\_start20k/artifacts/run\_summary\_grid.pdf}.
+\item job 1977, label cheetah\_run\_chaos\_no\_rhs\_300k\_vec8\_s15, method no\_rhs, regime chaos: final 457.7344665527344, best 457.7344665527344, runtime 01:13:47, horizon path , bucket path 3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/cheetah-run\_chaos\_no\_rhs\_cheetah\_run\_chaos\_no\_rhs\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/cheetah-run\_chaos\_no\_rhs\_cheetah\_run\_chaos\_no\_rhs\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1986, label acrobot\_swingup\_chaos\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime chaos: final 353.9346923828125, best 379.4981994628906, runtime 01:16:17, horizon path 4->4->4->4->4, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/acrobot-swingup\_dense\_rhs\_chaos\_acrobot\_swingup\_chaos\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/acrobot-swingup\_dense\_rhs\_chaos\_acrobot\_swingup\_chaos\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1974, label hopper\_hop\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime clean: final 350.6131896972656, best 351.2184143066406, runtime 01:16:29, horizon path 2->2->3->2->3, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/hopper-hop\_dense\_rhs\_clean\_hopper\_hop\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/hopper-hop\_dense\_rhs\_clean\_hopper\_hop\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1979, label acrobot\_swingup\_chaos\_no\_rhs\_300k\_vec8\_s15, method no\_rhs, regime chaos: final 292.6933288574219, best 329.11444091796875, runtime 01:08:01, horizon path , bucket path 3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/acrobot-swingup\_chaos\_no\_rhs\_acrobot\_swingup\_chaos\_no\_rhs\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/acrobot-swingup\_chaos\_no\_rhs\_acrobot\_swingup\_chaos\_no\_rhs\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1967, label hopper\_hop\_clean\_no\_rhs\_300k\_vec8\_s15, method no\_rhs, regime clean: final 287.27569580078125, best 287.27569580078125, runtime 01:06:43, horizon path , bucket path 3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/hopper-hop\_clean\_no\_rhs\_hopper\_hop\_clean\_no\_rhs\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/hopper-hop\_clean\_no\_rhs\_hopper\_hop\_clean\_no\_rhs\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1655, label dense\_rhs\_ei\_smoke\_80k\_vec8\_s15\_risk05\_c002\_start20k, method dense\_rhs\_expected\_improvement, regime clean: final 286.9360656738281, best 286.9360656738281, runtime 00:41:16, horizon path 2->2->2, bucket path 4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_ei\_smoke\_80k\_vec8\_s15\_risk05\_c002\_start20k}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_ei\_smoke\_80k\_vec8\_s15\_risk05\_c002\_start20k/artifacts/run\_summary\_grid.pdf}.
+\item job 1688, label dense\_rhs\_plus2\_shadowprobe\_w1p0\_120k\_vec8\_s15\_start20k, method dense\_rhs\_shadow\_probe, regime clean: final 274.5364074707031, best 274.5364074707031, runtime 00:30:43, horizon path 3, bucket path 4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_shadowprobe\_w1p0\_120k\_vec8\_s15\_start20k}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_shadowprobe\_w1p0\_120k\_vec8\_s15\_start20k/artifacts/run\_summary\_grid.pdf}.
+\item job 1673, label dense\_rhs\_plus2\_sparse\_hifi\_start20\_r2b5\_margin05\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime clean: final 262.2226867675781, best 262.2226867675781, runtime 00:44:08, horizon path 3->4, bucket path 4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_sparse\_hifi\_start20\_r2b5\_margin05\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_sparse\_hifi\_start20\_r2b5\_margin05\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1644, label dense\_rhs\_ei\_smoke\_80k\_vec8\_s15\_risk15\_c003\_start20k, method dense\_rhs\_expected\_improvement, regime clean: final 241.28457641601562, best 241.28457641601562, runtime 00:39:23, horizon path 3->3->3, bucket path 4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_ei\_smoke\_80k\_vec8\_s15\_risk15\_c003\_start20k}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_ei\_smoke\_80k\_vec8\_s15\_risk15\_c003\_start20k/artifacts/run\_summary\_grid.pdf}.
+\item job 1981, label hopper\_hop\_chaos\_no\_rhs\_300k\_vec8\_s15, method no\_rhs, regime chaos: final 198.45770263671875, best 198.45770263671875, runtime 01:19:11, horizon path , bucket path 3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/hopper-hop\_chaos\_no\_rhs\_hopper\_hop\_chaos\_no\_rhs\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/hopper-hop\_chaos\_no\_rhs\_hopper\_hop\_chaos\_no\_rhs\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1988, label hopper\_hop\_chaos\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime chaos: final 173.11436462402344, best 173.11436462402344, runtime 01:31:31, horizon path 2->2->2->3->3, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/hopper-hop\_dense\_rhs\_chaos\_hopper\_hop\_chaos\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/hopper-hop\_dense\_rhs\_chaos\_hopper\_hop\_chaos\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1672, label dense\_rhs\_plus2\_sparse\_hifi\_start70\_returndom\_r2b5\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime clean: final 97.265380859375, best 97.265380859375, runtime 00:44:33, horizon path 4, bucket path 4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_sparse\_hifi\_start70\_returndom\_r2b5\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_sparse\_hifi\_start70\_returndom\_r2b5\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1982, label fish\_swim\_chaos\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15, method dense\_rhs\_sparse\_hifi, regime chaos: final 76.80537414550781, best 90.21401977539062, runtime 01:19:01, horizon path 3->3->3->3->3, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/fish-swim\_dense\_rhs\_chaos\_fish\_swim\_chaos\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/fish-swim\_dense\_rhs\_chaos\_fish\_swim\_chaos\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1975, label fish\_swim\_chaos\_no\_rhs\_300k\_vec8\_s15, method no\_rhs, regime chaos: final 73.97637939453125, best 82.80696105957031, runtime 01:10:46, horizon path , bucket path 3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3->3. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/fish-swim\_chaos\_no\_rhs\_fish\_swim\_chaos\_no\_rhs\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/fish-swim\_chaos\_no\_rhs\_fish\_swim\_chaos\_no\_rhs\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1691, label dense\_rhs\_plus2\_shadowprobe\_w0p25\_300k\_vec8\_s15\_start20k, method dense\_rhs\_shadow\_probe, regime clean: final 68.86866760253906, best 68.86866760253906, runtime 00:53:46, horizon path 3->4->4, bucket path 4->4->4->4->4->4->4->4->4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_shadowprobe\_w0p25\_300k\_vec8\_s15\_start20k}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_shadowprobe\_w0p25\_300k\_vec8\_s15\_start20k/artifacts/run\_summary\_grid.pdf}.
+\item job 1703, label dense\_rhs\_plus2\_hcap4\_ei\_start70\_300k\_vec8\_s15, method dense\_rhs\_horizon\_trust\_region\_ei, regime clean: final 46.981651306152344, best 46.981651306152344, runtime 00:34:28, horizon path 2, bucket path 4->4->4->4->4->4->4->4. Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_hcap4\_ei\_start70\_300k\_vec8\_s15}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_clean\_dense\_rhs\_plus2\_hcap4\_ei\_start70\_300k\_vec8\_s15/artifacts/run\_summary\_grid.pdf}.
+\item job 1661, label dense\_rhs\_sparse\_hifi\_chaos\_smoke\_120k\_vec8\_s15\_start20k, method dense\_rhs\_sparse\_hifi, regime chaos: final , best , runtime 00:07:22, horizon path , bucket path . Run directory: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_chaos\_dense\_rhs\_sparse\_hifi\_chaos\_smoke\_120k\_vec8\_s15\_start20k}. Summary plot: \texttt{/home/goncalo/git/horizonsearch/tdmpc2-jax-codex/outputs/quadruped-run\_dense\_rhs\_chaos\_dense\_rhs\_sparse\_hifi\_chaos\_smoke\_120k\_vec8\_s15\_start20k/artifacts/run\_summary\_grid.pdf}.
+\end{itemize}
+
+\paragraph{Architecture changes and decision provenance.}
+The chronological decision log below is the source-of-truth trace connecting plots/metrics to architecture decisions. It should be read together with the model ranking table and each run summary grid.
+
+\begin{verbatim}
+ No automatic follow-up rule fired.
+
+## 2026-05-03T09:56:33+00:00
+
+Processed `dense_rhs_plus2_fullh_du_learnerproxy_start70_300k_vec8_s15` job `1718`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:27:42`
+- Final eval: `834.3712768554688` ± `20.812170028686523`
+- Best eval: `834.3712768554688` at step `300000`
+- Horizon path: `3->4->4->4->4`
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-03T09:56:36+00:00
+
+H={3,4} late-exploitation family completed below target (best=919.34619140625, best_label=dense_rhs_plus2_h34_start120_margin02_300k_vec8_s15). Steward needs a new algorithm RFC; do not silently lower the clean +2 goal.
+
+## 2026-05-03T10:07:03+00:00
+
+H={3,4} late-exploitation family completed below target (best=919.34619140625, best_label=dense_rhs_plus2_h34_start120_margin02_300k_vec8_s15). Steward needs a new algorithm RFC; do not silently lower the clean +2 goal.
+
+## 2026-05-03T10:37:58+00:00
+
+H={3,4} late-exploitation family completed below target (best=919.34619140625, best_label=dense_rhs_plus2_h34_start120_margin02_300k_vec8_s15). Steward needs a new algorithm RFC; do not silently lower the clean +2 goal.
+
+## 2026-05-03T10:53:27+00:00
+
+H={3,4} late-exploitation family completed below target (best=919.34619140625, best_label=dense_rhs_plus2_h34_start120_margin02_300k_vec8_s15). Steward needs a new algorithm RFC; do not silently lower the clean +2 goal.
+
+## 2026-05-03T11:03:58+00:00
+
+H={3,4} late-exploitation family completed below target (best=919.34619140625, best_label=dense_rhs_plus2_h34_start120_margin02_300k_vec8_s15). Steward needs a new algorithm RFC; do not silently lower the clean +2 goal.
+
+## 2026-05-03T11:14:27+00:00
+
+H={3,4} late-exploitation family completed below target (best=919.34619140625, best_label=dense_rhs_plus2_h34_start120_margin02_300k_vec8_s15). Steward needs a new algorithm RFC; do not silently lower the clean +2 goal.
+
+## 2026-05-03T11:24:57+00:00
+
+H={3,4} late-exploitation family completed below target (best=919.34619140625, best_label=dense_rhs_plus2_h34_start120_margin02_300k_vec8_s15). Steward needs a new algorithm RFC; do not silently lower the clean +2 goal.
+
+## 2026-05-03T11:45:59+00:00
+
+H={3,4} late-exploitation family completed below target (best=919.34619140625, best_label=dense_rhs_plus2_h34_start120_margin02_300k_vec8_s15). Steward needs a new algorithm RFC; do not silently lower the clean +2 goal.
+
+## 2026-05-04T12:40:00+00:00
+
+User closed the quadruped clean +2 architecture-search target. The campaign no longer searches for a Dense-RHS variant that beats the clean no-RHS baseline by 2%; instead, the selected Dense-RHS winner architecture is `dense_rhs_plus2_sparse_hifi_start70_300k_vec8_s15` from job `1663` (`922.63 +/- 21.34`, horizon path `3->3->3->3->3`).
+
+The new steward objective is table-driven cross-environment evaluation:
+
+- First fill MJX port gates and clean no-RHS paper-parity baselines for the scheduled environments.
+- Then run the selected Dense-RHS winner architecture in clean/no-chaos mode.
+- Then run no-RHS chaos baselines for missing environments.
+- Finally run the selected Dense-RHS winner architecture in chaos mode.
+
+New launches are blocked until `runs/results/final_results_table_template.tex` is reviewed and approved. The goal file now enforces `constraints.max_active_gpus=2`, `success.clean_plus2_gate_closed=true`, and `constraints.final_table_approved=false`.
+
+## 2026-05-04T12:48:12+00:00
+
+Launched `dense_rhs_winner_chaos_300k_vec8_s15` as job `1810`.
+
+## 2026-05-04T14:44:40+00:00
+
+Processed `dense_rhs_winner_chaos_300k_vec8_s15` job `1810`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:48:24`
+- Final eval: `614.44970703125` ± `44.561885833740234`
+- Best eval: `614.44970703125` at step `300000`
+- Horizon path: `3->2->2->2->3`
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-08T14:46:06+00:00
+
+Table dispatcher queued clean_no_rhs profiles: fish_swim_clean_no_rhs_300k_vec8_s15, finger_turn_hard_clean_no_rhs_300k_vec8_s15, cheetah_run_clean_no_rhs_300k_vec8_s15, cartpole_swingup_clean_no_rhs_300k_vec8_s15, acrobot_swingup_clean_no_rhs_300k_vec8_s15, walker_run_clean_no_rhs_300k_vec8_s15, hopper_hop_clean_no_rhs_300k_vec8_s15.
+
+## 2026-05-08T14:46:18+00:00
+
+Launched `fish_swim_clean_no_rhs_300k_vec8_s15` as job `1959`.
+
+## 2026-05-08T14:47:20+00:00
+
+Launched `finger_turn_hard_clean_no_rhs_300k_vec8_s15` as job `1960`.
+
+## 2026-05-08T15:40:33+00:00
+
+Processed `fish_swim_clean_no_rhs_300k_vec8_s15` job `1959`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `00:53:38`
+- Final eval: `505.16326904296875` ± `284.06915283203125`
+- Best eval: `596.1466064453125` at step `250000`
+- Horizon path: ``
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-08T15:40:58+00:00
+
+Launched `cheetah_run_clean_no_rhs_300k_vec8_s15` as job `1962`.
+
+## 2026-05-08T15:44:32+00:00
+
+Processed `finger_turn_hard_clean_no_rhs_300k_vec8_s15` job `1960`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `00:56:55`
+- Final eval: `980.5499877929688` ± `13.987404823303223`
+- Best eval: `980.5499877929688` at step `300000`
+- Horizon path: ``
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-08T15:44:52+00:00
+
+Launched `cartpole_swingup_clean_no_rhs_300k_vec8_s15` as job `1963`.
+
+## 2026-05-08T16:04:30+00:00
+
+Launched `acrobot_swingup_clean_no_rhs_300k_vec8_s15` as job `1964`.
+
+## 2026-05-08T16:37:34+00:00
+
+Processed `cartpole_swingup_clean_no_rhs_300k_vec8_s15` job `1963`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `00:52:26`
+- Final eval: `866.7747192382812` ± `0.26454320549964905`
+- Best eval: `867.5153198242188` at step `200000`
+- Horizon path: ``
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-08T16:37:43+00:00
+
+Launched `walker_run_clean_no_rhs_300k_vec8_s15` as job `1966`.
+
+## 2026-05-08T16:38:19+00:00
+
+Processed `cheetah_run_clean_no_rhs_300k_vec8_s15` job `1962`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `00:56:55`
+- Final eval: `845.8548583984375` ± `116.47073364257812`
+- Best eval: `871.3776245117188` at step `150000`
+- Horizon path: ``
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-08T16:57:01+00:00
+
+Processed `acrobot_swingup_clean_no_rhs_300k_vec8_s15` job `1964`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `00:50:35`
+- Final eval: `539.5477294921875` ± `162.24920654296875`
+- Best eval: `539.5477294921875` at step `300000`
+- Horizon path: ``
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-08T16:57:20+00:00
+
+Launched `hopper_hop_clean_no_rhs_300k_vec8_s15` as job `1967`.
+
+## 2026-05-08T18:05:38+00:00
+
+Processed `walker_run_clean_no_rhs_300k_vec8_s15` job `1966`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:26:04`
+- Final eval: `839.2001953125` ± `10.541329383850098`
+- Best eval: `839.2001953125` at step `300000`
+- Horizon path: ``
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-08T18:05:39+00:00
+
+Processed `hopper_hop_clean_no_rhs_300k_vec8_s15` job `1967`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:06:43`
+- Final eval: `287.27569580078125` ± `14.467547416687012`
+- Best eval: `287.27569580078125` at step `300000`
+- Horizon path: ``
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-08T18:05:47+00:00
+
+Table dispatcher queued clean_dense_rhs_winner profiles: fish_swim_clean_dense_rhs_sparse_hifi_300k_vec8_s15, finger_turn_hard_clean_dense_rhs_sparse_hifi_300k_vec8_s15, cheetah_run_clean_dense_rhs_sparse_hifi_300k_vec8_s15, cartpole_swingup_clean_dense_rhs_sparse_hifi_300k_vec8_s15, acrobot_swingup_clean_dense_rhs_sparse_hifi_300k_vec8_s15, walker_run_clean_dense_rhs_sparse_hifi_300k_vec8_s15, hopper_hop_clean_dense_rhs_sparse_hifi_300k_vec8_s15.
+
+## 2026-05-08T18:05:59+00:00
+
+Launched `fish_swim_clean_dense_rhs_sparse_hifi_300k_vec8_s15` as job `1968`.
+
+## 2026-05-08T18:06:00+00:00
+
+Launched `finger_turn_hard_clean_dense_rhs_sparse_hifi_300k_vec8_s15` as job `1969`.
+
+## 2026-05-08T18:11:54+00:00
+
+Launched `cheetah_run_clean_dense_rhs_sparse_hifi_300k_vec8_s15` as job `1970`.
+
+## 2026-05-08T19:10:05+00:00
+
+Processed `fish_swim_clean_dense_rhs_sparse_hifi_300k_vec8_s15` job `1968`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:03:36`
+- Final eval: `596.9766845703125` ± `232.79652404785156`
+- Best eval: `708.2169189453125` at step `250000`
+- Horizon path: `3->3->3->3->3`
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-08T19:10:25+00:00
+
+Launched `cartpole_swingup_clean_dense_rhs_sparse_hifi_300k_vec8_s15` as job `1971`.
+
+## 2026-05-08T19:18:07+00:00
+
+Processed `finger_turn_hard_clean_dense_rhs_sparse_hifi_300k_vec8_s15` job `1969`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:11:50`
+- Final eval: `927.25` ± `102.99022674560547`
+- Best eval: `963.8499755859375` at step `200000`
+- Horizon path: `3->3->4->4->5`
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-08T19:18:28+00:00
+
+Launched `acrobot_swingup_clean_dense_rhs_sparse_hifi_300k_vec8_s15` as job `1972`.
+
+## 2026-05-08T19:32:30+00:00
+
+Processed `cheetah_run_clean_dense_rhs_sparse_hifi_300k_vec8_s15` job `1970`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:19:14`
+- Final eval: `933.12890625` ± `37.509788513183594`
+- Best eval: `933.12890625` at step `300000`
+- Horizon path: `4->5->6->6->6`
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-08T19:32:50+00:00
+
+Launched `walker_run_clean_dense_rhs_sparse_hifi_300k_vec8_s15` as job `1973`.
+
+## 2026-05-08T20:18:50+00:00
+
+Processed `acrobot_swingup_clean_dense_rhs_sparse_hifi_300k_vec8_s15` job `1972`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `00:59:31`
+- Final eval: `362.320556640625` ± `108.22805786132812`
+- Best eval: `575.4118041992188` at step `200000`
+- Horizon path: `3->3->3->3->3`
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-08T20:19:10+00:00
+
+Launched `hopper_hop_clean_dense_rhs_sparse_hifi_300k_vec8_s15` as job `1974`.
+
+## 2026-05-08T20:21:27+00:00
+
+Processed `cartpole_swingup_clean_dense_rhs_sparse_hifi_300k_vec8_s15` job `1971`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:10:34`
+- Final eval: `882.39404296875` ± `0.22589746117591858`
+- Best eval: `882.39404296875` at step `300000`
+- Horizon path: `4->4->5->4->3`
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-09T08:50:01+00:00
+
+Processed `walker_run_clean_dense_rhs_sparse_hifi_300k_vec8_s15` job `1973`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:38:25`
+- Final eval: `835.9410400390625` ± `9.586824417114258`
+- Best eval: `835.9410400390625` at step `300000`
+- Horizon path: `4->3->3->4->4`
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-09T08:50:03+00:00
+
+Processed `hopper_hop_clean_dense_rhs_sparse_hifi_300k_vec8_s15` job `1974`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:16:29`
+- Final eval: `350.6131896972656` ± `12.311149597167969`
+- Best eval: `351.2184143066406` at step `250000`
+- Horizon path: `2->2->3->2->3`
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-09T08:50:17+00:00
+
+Table dispatcher queued chaos_no_rhs profiles: fish_swim_chaos_no_rhs_300k_vec8_s15, finger_turn_hard_chaos_no_rhs_300k_vec8_s15, cheetah_run_chaos_no_rhs_300k_vec8_s15, cartpole_swingup_chaos_no_rhs_300k_vec8_s15, acrobot_swingup_chaos_no_rhs_300k_vec8_s15, walker_run_chaos_no_rhs_300k_vec8_s15, hopper_hop_chaos_no_rhs_300k_vec8_s15.
+
+## 2026-05-09T08:50:31+00:00
+
+Launched `fish_swim_chaos_no_rhs_300k_vec8_s15` as job `1975`.
+
+## 2026-05-09T08:50:33+00:00
+
+Launched `finger_turn_hard_chaos_no_rhs_300k_vec8_s15` as job `1976`.
+
+## 2026-05-09T08:50:34+00:00
+
+Launched `cheetah_run_chaos_no_rhs_300k_vec8_s15` as job `1977`.
+
+## 2026-05-09T10:03:15+00:00
+
+Processed `fish_swim_chaos_no_rhs_300k_vec8_s15` job `1975`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:10:46`
+- Final eval: `73.97637939453125` ± `35.65225601196289`
+- Best eval: `82.80696105957031` at step `50000`
+- Horizon path: ``
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-09T10:03:38+00:00
+
+Launched `cartpole_swingup_chaos_no_rhs_300k_vec8_s15` as job `1978`.
+
+## 2026-05-09T10:04:31+00:00
+
+Processed `finger_turn_hard_chaos_no_rhs_300k_vec8_s15` job `1976`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:13:09`
+- Final eval: `713.4000244140625` ± `403.3861083984375`
+- Best eval: `713.4000244140625` at step `300000`
+- Horizon path: ``
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-09T10:04:33+00:00
+
+Processed `cheetah_run_chaos_no_rhs_300k_vec8_s15` job `1977`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:13:47`
+- Final eval: `457.7344665527344` ± `76.45452117919922`
+- Best eval: `457.7344665527344` at step `300000`
+- Horizon path: ``
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-09T10:04:58+00:00
+
+Launched `acrobot_swingup_chaos_no_rhs_300k_vec8_s15` as job `1979`.
+
+## 2026-05-09T10:04:59+00:00
+
+Launched `walker_run_chaos_no_rhs_300k_vec8_s15` as job `1980`.
+
+## 2026-05-09T11:14:08+00:00
+
+Processed `cartpole_swingup_chaos_no_rhs_300k_vec8_s15` job `1978`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:10:06`
+- Final eval: `855.3677978515625` ± `2.8434972763061523`
+- Best eval: `855.3677978515625` at step `300000`
+- Horizon path: ``
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-09T11:14:09+00:00
+
+Processed `acrobot_swingup_chaos_no_rhs_300k_vec8_s15` job `1979`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:08:01`
+- Final eval: `292.6933288574219` ± `96.26347351074219`
+- Best eval: `329.11444091796875` at step `250000`
+- Horizon path: ``
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-09T11:14:33+00:00
+
+Launched `hopper_hop_chaos_no_rhs_300k_vec8_s15` as job `1981`.
+
+## 2026-05-09T17:51:44+00:00
+
+Processed `walker_run_chaos_no_rhs_300k_vec8_s15` job `1980`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:43:12`
+- Final eval: `591.030029296875` ± `30.23134994506836`
+- Best eval: `591.030029296875` at step `300000`
+- Horizon path: ``
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-09T17:51:48+00:00
+
+Processed `hopper_hop_chaos_no_rhs_300k_vec8_s15` job `1981`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:19:11`
+- Final eval: `198.45770263671875` ± `7.539370059967041`
+- Best eval: `198.45770263671875` at step `300000`
+- Horizon path: ``
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-09T17:52:03+00:00
+
+Table dispatcher queued chaos_dense_rhs_winner profiles: fish_swim_chaos_dense_rhs_sparse_hifi_300k_vec8_s15, finger_turn_hard_chaos_dense_rhs_sparse_hifi_300k_vec8_s15, cheetah_run_chaos_dense_rhs_sparse_hifi_300k_vec8_s15, cartpole_swingup_chaos_dense_rhs_sparse_hifi_300k_vec8_s15, acrobot_swingup_chaos_dense_rhs_sparse_hifi_300k_vec8_s15, walker_run_chaos_dense_rhs_sparse_hifi_300k_vec8_s15, hopper_hop_chaos_dense_rhs_sparse_hifi_300k_vec8_s15.
+
+## 2026-05-09T17:52:20+00:00
+
+Launched `fish_swim_chaos_dense_rhs_sparse_hifi_300k_vec8_s15` as job `1982`.
+
+## 2026-05-09T17:52:23+00:00
+
+Launched `finger_turn_hard_chaos_dense_rhs_sparse_hifi_300k_vec8_s15` as job `1983`.
+
+## 2026-05-09T17:52:27+00:00
+
+Launched `cheetah_run_chaos_dense_rhs_sparse_hifi_300k_vec8_s15` as job `1984`.
+
+## 2026-05-09T19:11:57+00:00
+
+Processed `fish_swim_chaos_dense_rhs_sparse_hifi_300k_vec8_s15` job `1982`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:19:01`
+- Final eval: `76.80537414550781` ± `35.97894287109375`
+- Best eval: `90.21401977539062` at step `50000`
+- Horizon path: `3->3->3->3->3`
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-09T19:12:22+00:00
+
+Launched `cartpole_swingup_chaos_dense_rhs_sparse_hifi_300k_vec8_s15` as job `1985`.
+
+## 2026-05-09T19:18:54+00:00
+
+Processed `finger_turn_hard_chaos_dense_rhs_sparse_hifi_300k_vec8_s15` job `1983`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:24:19`
+- Final eval: `688.5999755859375` ± `405.9638671875`
+- Best eval: `688.5999755859375` at step `300000`
+- Horizon path: `3->3->3->3->3`
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-09T19:19:16+00:00
+
+Launched `acrobot_swingup_chaos_dense_rhs_sparse_hifi_300k_vec8_s15` as job `1986`.
+
+## 2026-05-09T19:24:53+00:00
+
+Processed `cheetah_run_chaos_dense_rhs_sparse_hifi_300k_vec8_s15` job `1984`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:31:02`
+- Final eval: `491.46044921875` ± `76.12613677978516`
+- Best eval: `491.46044921875` at step `300000`
+- Horizon path: `3->4->3->4->5`
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-09T19:25:15+00:00
+
+Launched `walker_run_chaos_dense_rhs_sparse_hifi_300k_vec8_s15` as job `1987`.
+
+## 2026-05-09T20:33:45+00:00
+
+Processed `cartpole_swingup_chaos_dense_rhs_sparse_hifi_300k_vec8_s15` job `1985`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:19:03`
+- Final eval: `876.3756103515625` ± `1.726609706878662`
+- Best eval: `876.3756103515625` at step `300000`
+- Horizon path: `3->3->3->2->3`
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-09T20:34:08+00:00
+
+Launched `hopper_hop_chaos_dense_rhs_sparse_hifi_300k_vec8_s15` as job `1988`.
+
+## 2026-05-09T20:36:00+00:00
+
+Processed `acrobot_swingup_chaos_dense_rhs_sparse_hifi_300k_vec8_s15` job `1986`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:16:17`
+- Final eval: `353.9346923828125` ± `109.49887084960938`
+- Best eval: `379.4981994628906` at step `250000`
+- Horizon path: `4->4->4->4->4`
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-09T21:21:07+00:00
+
+Processed `walker_run_chaos_dense_rhs_sparse_hifi_300k_vec8_s15` job `1987`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:54:57`
+- Final eval: `579.1027221679688` ± `34.14745330810547`
+- Best eval: `627.7696533203125` at step `250000`
+- Horizon path: `3->3->3->4->4`
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+## 2026-05-09T22:06:08+00:00
+
+Processed `hopper_hop_chaos_dense_rhs_sparse_hifi_300k_vec8_s15` job `1988`: `completed`.
+
+- SLURM state: `COMPLETED`
+- Runtime: `01:31:31`
+- Final eval: `173.11436462402344` ± `9.265361785888672`
+- Best eval: `173.11436462402344` at step `300000`
+- Horizon path: `2->2->2->3->3`
+- Reason: Completed; no automatic classifier for this method.
+- Follow-up: No automatic follow-up rule fired.
+
+\end{verbatim}
+
+\paragraph{Clean versus chaos comparison requirement.}
+For every scheduled environment, compare clean vs chaos for no-RHS baseline and the winning Dense-RHS model.

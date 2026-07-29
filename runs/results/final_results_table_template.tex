@@ -1,0 +1,23 @@
+% Auto-generated Dense-RHS final campaign table template.
+% Approved on 2026-05-04. Steward launches are table-driven only.
+\begin{table*}[t]
+\centering
+\small
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{llrrrrrrrrl}
+\toprule
+Env & MJX & TD-MPC2 paper & Clean no-RHS & Clean RHS & $\Delta$ clean & Chaos no-RHS & Chaos RHS & $\Delta$ chaos & Seeds & Status \\
+\midrule
+fish-swim & pending\_implementation & TBD & -- & -- & TBD & -- & -- & TBD & 1,3,5,7,15 & blocked\_pending\_mjx\_gate \\
+finger-turn\_hard & pending\_implementation & TBD & -- & -- & TBD & -- & -- & TBD & 1,3,5,7,15 & blocked\_pending\_mjx\_gate \\
+cheetah-run & pending\_implementation & TBD & -- & -- & TBD & -- & -- & TBD & 1,3,5,7,15 & blocked\_pending\_mjx\_gate \\
+cartpole-swingup & pending\_implementation & TBD & -- & -- & TBD & -- & -- & TBD & 1,3,5,7,15 & blocked\_pending\_mjx\_gate \\
+quadruped-run & ready & TBD & 924.65 $\pm$ 16.91 & 922.63 $\pm$ 21.34 & -0.2\% & 505.27 $\pm$ 35.01 & 614.45 $\pm$ 44.56 & +21.6\% & 1,3,5,7,15 & single-seed cells complete \\
+acrobot-swingup & pending\_implementation & TBD & -- & -- & TBD & -- & -- & TBD & 1,3,5,7,15 & blocked\_pending\_mjx\_gate \\
+walker-run & pending\_implementation & TBD & -- & -- & TBD & -- & -- & TBD & 1,3,5,7,15 & blocked\_pending\_mjx\_gate \\
+hopper-hop & pending\_implementation & TBD & -- & -- & TBD & -- & -- & TBD & 1,3,5,7,15 & blocked\_pending\_mjx\_gate \\
+\bottomrule
+\end{tabular}
+\caption{Final Dense-RHS campaign results structure. Each environment is filled in this order: MJX port gate, clean no-RHS paper-parity baseline, clean selected Dense-RHS winner, chaos no-RHS, chaos selected Dense-RHS winner, then confirmation seeds. Evaluation remains clean unless explicitly marked otherwise.}
+\label{tab:dense_rhs_final_campaign}
+\end{table*}

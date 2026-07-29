@@ -5,24 +5,113 @@ hydra:
     dir: outputs/${hydra.job.name}/${now:%Y-%m-%d_%H-%M-%S}
 
 seed: 0
-max_steps: 2_000_000
-buffer_size: 2_000_000
+max_steps: 10_000_000
+buffer_size: 1_000_000
 save_interval_steps: 100000
+checkpoint_buffer: true
 log_interval_steps: 10000
+update_chunk_size: 32
+collect_chunk_steps: 100
+seed_steps_override: null
+seed_pretrain_log_interval_updates: 512
+
+wandb:
+  enabled: false
+  project: temporalhorizon
+  entity: null
+  group: tdmpc2-jax
+  name: null
+  tags: []
+  mode: online
 
 env:
-  backend: dmc
-  env_id: dog-run
+  backend: mjx_dmc
+  env_id: quadruped-run
   num_envs: 4
   utd_ratio: 1.0
   asynchronous: True
 
   dmc: { obs_type: state }
+  mjx_dmc:
+    task: quadruped-run
+    obs_type: state
+    action_repeat: 2
+    episode_length: 500
+    enable_domain_randomization: true
+    enable_observation_noise: true
+    observation_noise_scale: 0.01
+    base_action_delay: 1
+    desired_speed: 5.0
+    action_repeat_dt: 0.02
+    wind_scale: 5.0
+    push_scale: 25.0
+    slip_scale: 0.15
+    jitter_prob: 0.02
+    reset_pool_size: 256
+
+dense_rhs:
+  enabled: true
+  initial_horizon: 3
+  start_query_step: null
+  horizons: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30]
+  hmax: 30
+  roughness_probe: projected_jvp
+  robust_return: mean_minus_std
+  selection_return_power: 1.0
+  roughness_weight: 1.0
+  return_std_weight: 1.0
+  learner_proxy_enabled: false
+  learner_proxy_weight: 0.0
+  learner_proxy_mode: probe_mean_loss
+  deployment_utility_enabled: false
+  deployment_utility_weight: 1.0
+  deployment_utility_exploration: 1.0
+  deployment_utility_prior_mean: 0.0
+  deployment_utility_prior_std: 150.0
+  deployment_utility_dense_score_weight: 25.0
+  deployment_utility_min_observations: 1
+  local_window_radius: 0
+  max_transition_delta: 0
+  incumbent_switch_margin: 0.0
+  credible_transition_enabled: false
+  credible_transition_rule: probability
+  credible_transition_min_prob: 0.0
+  transition_cost_scale: 0.0
+  transition_risk_weight: 1.0
+  transition_min_expected_net: 0.0
+  transition_model_weight: 1.0
+  transition_probe_weight: 1.0
+  transition_planner_weight: 1.0
+  transition_roughness_weight: 1.0
+  transition_return_std_weight: 1.0
+  transition_uncertainty_floor: 0.05
+  horizon_buckets: []
+  phase_min_samples_to_drop: 3
+  num_env_eval_replicas: 16
+  env_eval_enabled: true
+  env_eval_steps: 64
+  query_population_size: 128
+  query_policy_prior_samples: 8
+  query_num_elites: 16
+  query_mppi_iterations: 2
+  query_temperature: 1.0
+  prewarm_horizons: true
+  prewarm_all_phases: false
+  candidate_budget: {A: 29, B1: 18, B2: 12, B3: 9, B4: 9}
+  query_interval_steps: 20000
+
+evaluation:
+  enabled: false
+  interval_steps: 20000
+  num_episodes: 10
+  clean: true
+  prewarm: false
 
 encoder:
   encoder_dim: 256
   num_encoder_layers: 2
-  learning_rate: 1e-4
+  learning_rate: 9e-5
+  adam_eps: 1e-8
   tabulate: False
 
 world_model:
@@ -34,6 +123,8 @@ world_model:
   symlog_max: 10
   simnorm_dim: 8
   learning_rate: 3e-4
+  adam_eps: 1e-8
+  policy_adam_eps: 1e-5
   predict_continues: False
   dtype: float32
   max_grad_norm: 20
@@ -48,7 +139,7 @@ tdmpc2:
   num_elites: 64
   min_plan_std: 0.05
   max_plan_std: 2
-  temperature: 1.0
+  temperature: 0.5
   # Optimization
   batch_size: 256
   discount: 0.99

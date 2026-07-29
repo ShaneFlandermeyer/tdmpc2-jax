@@ -1,0 +1,4 @@
+env_id,regime,seed,reason
+fish-swim,chaos,1,missing_or_nonfinite_score_or_zero_baseline
+fish-swim,chaos,15,missing_or_nonfinite_score_or_zero_baseline
+fish-swim,chaos,7,missing_or_nonfinite_score_or_zero_baseline

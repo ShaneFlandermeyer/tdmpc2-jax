@@ -1,5 +1,6 @@
 import copy
 from functools import partial
+import math
 from typing import Dict, Tuple, Callable
 import flax.linen as nn
 from flax.training.train_state import TrainState
@@ -14,7 +15,6 @@ import jax.numpy as jnp
 import optax
 from tdmpc2_jax.networks import Ensemble
 from tdmpc2_jax.common.util import symlog, two_hot_inv
-import tensorflow_probability.substrates.jax.distributions as tfd
 
 
 class WorldModel(struct.PyTreeNode):
@@ -54,6 +54,8 @@ class WorldModel(struct.PyTreeNode):
              predict_continues: bool,
              # Optimization
              learning_rate: float,
+             adam_eps: float = 1e-8,
+             policy_adam_eps: float = 1e-5,
              max_grad_norm: float = 20,
              # Misc
              tabulate: bool = False,
@@ -76,8 +78,7 @@ class WorldModel(struct.PyTreeNode):
             dynamics_key, jnp.zeros(latent_dim + action_dim))['params'],
         tx=optax.chain(
             optax.zero_nans(),
-            optax.clip_by_global_norm(max_grad_norm),
-            optax.adamw(learning_rate),
+            optax.adam(learning_rate, eps=adam_eps),
         )
     )
 
@@ -93,8 +94,7 @@ class WorldModel(struct.PyTreeNode):
             reward_key, jnp.zeros(latent_dim + action_dim))['params'],
         tx=optax.chain(
             optax.zero_nans(),
-            optax.clip_by_global_norm(max_grad_norm),
-            optax.adamw(learning_rate),
+            optax.adam(learning_rate, eps=adam_eps),
         )
     )
 
@@ -111,7 +111,7 @@ class WorldModel(struct.PyTreeNode):
         tx=optax.chain(
             optax.zero_nans(),
             optax.clip_by_global_norm(max_grad_norm),
-            optax.adamw(learning_rate),
+            optax.adam(learning_rate, eps=policy_adam_eps),
         )
     )
 
@@ -131,8 +131,7 @@ class WorldModel(struct.PyTreeNode):
             jnp.zeros(latent_dim + action_dim))['params'],
         tx=optax.chain(
             optax.zero_nans(),
-            optax.clip_by_global_norm(max_grad_norm),
-            optax.adamw(learning_rate),
+            optax.adam(learning_rate, eps=adam_eps),
         )
     )
     target_value_model = TrainState.create(
@@ -152,8 +151,7 @@ class WorldModel(struct.PyTreeNode):
               continue_key, jnp.zeros(latent_dim))['params'],
           tx=optax.chain(
               optax.zero_nans(),
-              optax.clip_by_global_norm(max_grad_norm),
-              optax.adamw(learning_rate),
+              optax.adam(learning_rate, eps=adam_eps),
           )
       )
     else:
@@ -272,14 +270,17 @@ class WorldModel(struct.PyTreeNode):
     log_std = min_log_std + 0.5 * \
         (max_log_std - min_log_std) * (jnp.tanh(log_std) + 1)
 
-    action_dist = tfd.MultivariateNormalDiag(
-        loc=mean, scale_diag=jnp.exp(log_std)
-    )
+    std = jnp.exp(log_std)
     if deterministic:
       action = mean
     else:
-      action = action_dist.sample(seed=key)
-    log_probs = action_dist.log_prob(action)
+      action = mean + std * jax.random.normal(key, shape=mean.shape)
+    log_probs = -0.5 * (
+        jnp.square((action - mean) / std) +
+        2.0 * log_std +
+        math.log(2.0 * math.pi)
+    )
+    log_probs = jnp.sum(log_probs, axis=-1)
 
     # Squash tanh
     log_probs -= jnp.sum(
@@ -289,12 +290,16 @@ class WorldModel(struct.PyTreeNode):
     action = jnp.tanh(action)
     return action, mean, log_std, log_probs
 
-  @jax.jit
-  def Q(self, z: jax.Array, a: jax.Array, params: Dict, key: PRNGKeyArray
-        ) -> Tuple[jax.Array, jax.Array]:
+  @partial(jax.jit, static_argnames=('train',))
+  def Q(self,
+        z: jax.Array,
+        a: jax.Array,
+        params: Dict,
+        key: PRNGKeyArray,
+        train: bool = False) -> Tuple[jax.Array, jax.Array]:
     z = jnp.concatenate([z, a], axis=-1)
     logits = self.value_model.apply_fn(
-        {'params': params}, z, rngs={'dropout': key}
+        {'params': params}, z, train=train, rngs={'dropout': key}
     ).astype(jnp.float32)
 
     Q = two_hot_inv(logits, self.symlog_min, self.symlog_max, self.num_bins)

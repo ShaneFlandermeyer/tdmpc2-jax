@@ -1,0 +1,47 @@
+\documentclass{article}
+\usepackage{booktabs}
+\usepackage[margin=1in]{geometry}
+\begin{document}
+\section*{Compact CoRL Adaptive-RHS Campaign Report}
+
+\subsection*{Executive Summary}
+
+\noindent $\bullet$ Completed main profiles: 0/72.\\
+\noindent $\bullet$ Mean final fixed paper-horizon score: nan.\\
+\noindent $\bullet$ Mean final adaptive RHS score: nan.\\
+\noindent $\bullet$ Main claim: adaptive RHS is evaluated against the standard TD-MPC2 fixed horizon without a horizon sweep.\\
+
+\subsection*{Method}
+
+The baseline is TD-MPC2-JAX with Dense-RHS disabled and the paper-matched fixed horizon recorded in the ledger. Adaptive RHS uses the frozen sparse high-fidelity configuration from the current repo; no architecture search or per-environment horizon tuning is part of this campaign.\\
+
+\subsection*{Experiment Setup}
+
+Environments: quadruped-run, cheetah-run, hopper-hop, finger-turn\_hard, fish-swim, cartpole-swingup.\\
+
+Regimes: clean and chaos. Chaos enables domain randomization, observation noise, and one-step base action delay during training, while evaluation remains clean.\\
+
+Seeds: 1, 7, 15. Training budget: 500000 environment steps.\\
+
+\subsection*{Main Results}
+
+See `figures/fig1\_clean\_learning\_curves.*`, `figures/fig2\_chaos\_learning\_curves.*`, `tables/main\_final\_scores.*`, and `tables/main\_auc\_scores.*`.\\
+
+Clean completed rows: 0. Chaos completed rows: 0.\\
+
+\subsection*{Robustness}
+
+The robustness comparison should use per-method chaos-minus-clean deltas after all matched task/seed cells complete.\\
+
+\subsection*{Compute}
+
+See `figures/fig3\_time\_to\_parity.*`, `figures/fig4\_compute\_performance.*`, `tables/parity\_times.*`, and `tables/compute\_runtime.*`.\\
+
+\subsection*{Reproducibility}
+
+All rows are sourced from `experiments/corl\_compact\_ledger.csv`. Each row records SLURM job id, git commit, remote commit, run directory, seed, method, regime, and checkpoint status.\\
+
+\subsection*{Limitations}
+
+Humanoid is not included because the current MJX backend does not have a humanoid port or gate. Any blocked or failed rows must be interpreted as campaign limitations unless rerun with the same frozen method/config succeeds.\\
+\end{document}

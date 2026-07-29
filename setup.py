@@ -18,7 +18,13 @@ setup(
       'optax',
       'jaxtyping',
       'einops',
-      'gymnasium[mujoco]==1.0.0'                     
+      'gymnasium[mujoco]==1.0.0',
+      'hydra-core',
+      'tensorboard',
+      'orbax-checkpoint',
+      'dm_control',
+      'mujoco',
+      'mujoco-mjx',
     ],
 
 )

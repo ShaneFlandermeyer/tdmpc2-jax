@@ -1,0 +1,569 @@
+{
+  "name": "dense_rhs_corl_compact_v3",
+  "description": "Expanded CoRL Dense-RHS v3 campaign: six seeds, fish removed after push-chaos instability, two ready extra MJX environments, and three port-gated replacement environments with phased launch safeguards.",
+  "remote": {
+    "host": "ncc-gpu1",
+    "path": "/home/goncalo/git/horizonsearch/tdmpc2-jax-codex",
+    "steward_job_prefix": "tdmpc2-jax-corl-v3"
+  },
+  "tracking": {
+    "ledger": "experiments/corl_compact_v3_ledger.csv",
+    "decisions": "experiments/corl_compact_v3_decisions.md",
+    "results_dir": "runs/results/corl_compact_v3",
+    "remote_run_dir_prefix": "outputs/corl_pub_500k_v3"
+  },
+  "constraints": {
+    "max_active_gpus": 4,
+    "physical_gpu_free_util_pct": 10,
+    "physical_gpu_free_mem_mib": 1024,
+    "require_clean_local_git": true,
+    "require_clean_remote_git": true,
+    "require_remote_commit_match": true,
+    "require_checkpoint_resume_smoke": true,
+    "max_retries": 2,
+    "full_run_steps": 500000,
+    "paper_horizon": 3,
+    "expected_main_profiles": 240,
+    "expected_reused_main_profiles": 60,
+    "expected_new_main_profiles": 180
+  },
+  "pilot": {
+    "enabled": false,
+    "reason": "v2 pilot passed; v3 uses phased finite-score gates instead"
+  },
+  "matrix": {
+    "envs": [
+      {
+        "env_id": "quadruped-run",
+        "gate": "built_in",
+        "reason": "hardest supported high-dimensional locomotion"
+      },
+      {
+        "env_id": "cheetah-run",
+        "gate": "runs/results/mjx_gates/cheetah-run/mjx_gate.json",
+        "reason": "standard fast locomotion baseline"
+      },
+      {
+        "env_id": "hopper-hop",
+        "gate": "runs/results/mjx_gates/hopper-hop/mjx_gate.json",
+        "reason": "contact-heavy balance locomotion"
+      },
+      {
+        "env_id": "finger-turn_hard",
+        "gate": "runs/results/mjx_gates/finger-turn_hard/mjx_gate.json",
+        "reason": "precision manipulation-style task"
+      },
+      {
+        "env_id": "cup-catch",
+        "gate": "runs/results/mjx_gates/cup-catch/mjx_gate.json",
+        "reason": "replacement manipulation/contact task for removed fish-swim; launch blocked until MJX port gate exists and passes"
+      },
+      {
+        "env_id": "cartpole-swingup",
+        "gate": "runs/results/mjx_gates/cartpole-swingup/mjx_gate.json",
+        "reason": "canonical low-dimensional underactuated control"
+      },
+      {
+        "env_id": "acrobot-swingup",
+        "gate": "runs/results/mjx_gates/acrobot-swingup/mjx_gate.json",
+        "reason": "ready extra underactuated MJX task with passed gate"
+      },
+      {
+        "env_id": "walker-run",
+        "gate": "runs/results/mjx_gates/walker-run/mjx_gate.json",
+        "reason": "ready extra locomotion MJX task with passed gate"
+      },
+      {
+        "env_id": "pendulum-swingup",
+        "gate": "runs/results/mjx_gates/pendulum-swingup/mjx_gate.json",
+        "reason": "planned new MJX port; launch blocked until gate exists and passes"
+      },
+      {
+        "env_id": "reacher-hard",
+        "gate": "runs/results/mjx_gates/reacher-hard/mjx_gate.json",
+        "reason": "planned new MJX port; launch blocked until gate exists and passes"
+      }
+    ],
+    "regimes": {
+      "clean": {
+        "enable_domain_randomization": false,
+        "enable_observation_noise": false,
+        "base_action_delay": 0,
+        "eval_clean": true
+      },
+      "chaos": {
+        "enable_domain_randomization": true,
+        "enable_observation_noise": true,
+        "base_action_delay": 1,
+        "eval_clean": false
+      }
+    },
+    "methods": [
+      "paper_horizon",
+      "adaptive_rhs"
+    ],
+    "seeds": [
+      1,
+      7,
+      15,
+      23,
+      31,
+      42
+    ],
+    "launch_seed_priority": [
+      23,
+      31,
+      42,
+      15,
+      1,
+      7
+    ]
+  },
+  "run_defaults": {
+    "max_steps": 500000,
+    "save_interval_steps": 50000,
+    "checkpoint_buffer": true,
+    "eval_interval_steps": 50000,
+    "eval_num_episodes": 20,
+    "train_num_envs": 8,
+    "seed_steps_override": 4000,
+    "update_chunk_size": 128,
+    "collect_chunk_steps": 100,
+    "utd_ratio": 1.0,
+    "reset_pool_size": 64,
+    "paper_horizon": 3
+  },
+  "adaptive_rhs": {
+    "method_name": "dense_rhs_sparse_hifi_v2_guarded",
+    "initial_horizon": 3,
+    "horizons": "[2,3,4,5,6,7,8]",
+    "hmax": 8,
+    "query_start_step": 70000,
+    "query_interval_steps": 50000,
+    "num_env_eval_replicas": 16,
+    "env_eval_steps": 256,
+    "query_population_size": 256,
+    "query_policy_prior_samples": 12,
+    "query_num_elites": 32,
+    "query_mppi_iterations": 4,
+    "query_temperature": 0.5,
+    "selection_return_power": 4.0,
+    "roughness_weight": 1.0,
+    "return_std_weight": 1.0,
+    "learner_proxy_enabled": true,
+    "learner_proxy_weight": 1.0,
+    "learner_proxy_mode": "probe_mean_loss",
+    "deployment_utility_enabled": true,
+    "deployment_utility_weight": 1.0,
+    "deployment_utility_exploration": 0.25,
+    "deployment_utility_prior_mean": 0.0,
+    "deployment_utility_prior_std": 150.0,
+    "deployment_utility_dense_score_weight": 10.0,
+    "deployment_utility_min_observations": 2,
+    "local_window_radius": 1,
+    "max_transition_delta": 1,
+    "incumbent_switch_margin": 0.1,
+    "credible_transition_enabled": true,
+    "credible_transition_rule": "expected_improvement",
+    "credible_transition_min_prob": 0.0,
+    "transition_cost_scale": 0.15,
+    "transition_risk_weight": 1.0,
+    "transition_min_expected_net": 0.02,
+    "transition_model_weight": 1.0,
+    "transition_probe_weight": 1.0,
+    "transition_planner_weight": 1.0,
+    "transition_roughness_weight": 1.0,
+    "transition_return_std_weight": 1.0,
+    "transition_uncertainty_floor": 0.05,
+    "horizon_buckets": "[2,3,4,5,6,7,8]",
+    "candidate_budget": {
+      "A": 3,
+      "B1": 3,
+      "B2": 3,
+      "B3": 3,
+      "B4": 3
+    }
+  },
+  "setup_smoke": {
+    "run_id": "setup_checkpoint_resume_smoke",
+    "env_id": "cartpole-swingup",
+    "seed": 15,
+    "script": "scripts/ncc_corl_checkpoint_resume_smoke.sbatch",
+    "run_dir": "outputs/corl_pub_setup_v2/checkpoint_resume_smoke",
+    "required_result": "resume_verified.json"
+  },
+  "published_tdmpc2_scores": {
+    "quadruped-run": null,
+    "cheetah-run": null,
+    "hopper-hop": null,
+    "finger-turn_hard": null,
+    "cup-catch": null,
+    "cartpole-swingup": null,
+    "acrobot-swingup": null,
+    "walker-run": null,
+    "pendulum-swingup": null,
+    "reacher-hard": null
+  },
+  "artifacts": {
+    "figures": [
+      "fig1_clean_learning_curves",
+      "fig2_chaos_learning_curves",
+      "fig3_time_to_parity",
+      "fig4_compute_performance"
+    ],
+    "tables": [
+      "main_final_scores",
+      "main_auc_scores",
+      "parity_times",
+      "compute_runtime",
+      "rhs_percent_delta_by_seed",
+      "rhs_percent_delta_summary",
+      "rhs_percent_delta_excluded_pairs"
+    ],
+    "report": [
+      "corl_compact_base_report.md",
+      "corl_compact_base_report.tex"
+    ]
+  },
+  "gate_repair": {
+    "enabled": false,
+    "reserved_gpus": 0,
+    "release_when_gates_pass": [],
+    "profiles": [
+      {
+        "run_id": "gate_repair__fish-swim__clean__tiny_s23",
+        "env_id": "fish-swim",
+        "regime": "clean",
+        "method": "mjx_gate_tiny_clean",
+        "seed": 23,
+        "priority": 1,
+        "script": "scripts/ncc_mjx_gate.sbatch",
+        "remote_out_dir": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_clean_s23",
+        "gate_path": "runs/results/mjx_gates_chaos_diag/fish-swim/clean_tiny_s23/mjx_gate.json",
+        "env": {
+          "TASKS": "fish-swim",
+          "OUT_DIR": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_clean_s23",
+          "SEED": "23",
+          "NUM_ENVS": "1",
+          "STEPS": "4",
+          "RESET_POOL_SIZE": "1",
+          "CHAOS": "false"
+        },
+        "artifacts": [
+          {
+            "remote": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_clean_s23/fish-swim/mjx_gate.json",
+            "local": "runs/results/mjx_gates_chaos_diag/fish-swim/clean_tiny_s23/mjx_gate.json"
+          },
+          {
+            "remote": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_clean_s23/mjx_gate_summary.json",
+            "local": "runs/results/mjx_gates_chaos_diag/fish-swim/clean_tiny_s23/mjx_gate_summary.json"
+          }
+        ]
+      },
+      {
+        "run_id": "gate_repair__fish-swim__actuator_only__tiny_s23",
+        "env_id": "fish-swim",
+        "regime": "chaos",
+        "method": "mjx_gate_tiny_actuator_only",
+        "seed": 23,
+        "priority": 2,
+        "script": "scripts/ncc_mjx_gate.sbatch",
+        "remote_out_dir": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_actuator_only_s23",
+        "gate_path": "runs/results/mjx_gates_chaos_diag/fish-swim/actuator_only_tiny_s23/mjx_gate.json",
+        "env": {
+          "TASKS": "fish-swim",
+          "OUT_DIR": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_actuator_only_s23",
+          "SEED": "23",
+          "NUM_ENVS": "1",
+          "STEPS": "4",
+          "RESET_POOL_SIZE": "1",
+          "CHAOS": "true",
+          "ENABLE_DOMAIN_RANDOMIZATION": "true",
+          "ENABLE_OBSERVATION_NOISE": "false",
+          "BASE_ACTION_DELAY": "0",
+          "WIND_SCALE": "0.0",
+          "PUSH_SCALE": "0.0",
+          "SLIP_SCALE": "0.0",
+          "JITTER_PROB": "0.0"
+        },
+        "artifacts": [
+          {
+            "remote": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_actuator_only_s23/fish-swim/mjx_gate.json",
+            "local": "runs/results/mjx_gates_chaos_diag/fish-swim/actuator_only_tiny_s23/mjx_gate.json"
+          },
+          {
+            "remote": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_actuator_only_s23/mjx_gate_summary.json",
+            "local": "runs/results/mjx_gates_chaos_diag/fish-swim/actuator_only_tiny_s23/mjx_gate_summary.json"
+          }
+        ]
+      },
+      {
+        "run_id": "gate_repair__fish-swim__obs_noise_only__tiny_s23",
+        "env_id": "fish-swim",
+        "regime": "chaos",
+        "method": "mjx_gate_tiny_obs_noise_only",
+        "seed": 23,
+        "priority": 3,
+        "script": "scripts/ncc_mjx_gate.sbatch",
+        "remote_out_dir": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_obs_noise_only_s23",
+        "gate_path": "runs/results/mjx_gates_chaos_diag/fish-swim/obs_noise_only_tiny_s23/mjx_gate.json",
+        "env": {
+          "TASKS": "fish-swim",
+          "OUT_DIR": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_obs_noise_only_s23",
+          "SEED": "23",
+          "NUM_ENVS": "1",
+          "STEPS": "4",
+          "RESET_POOL_SIZE": "1",
+          "CHAOS": "true",
+          "ENABLE_DOMAIN_RANDOMIZATION": "true",
+          "ENABLE_OBSERVATION_NOISE": "true",
+          "BASE_ACTION_DELAY": "0",
+          "WIND_SCALE": "0.0",
+          "PUSH_SCALE": "0.0",
+          "SLIP_SCALE": "0.0",
+          "JITTER_PROB": "0.0"
+        },
+        "artifacts": [
+          {
+            "remote": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_obs_noise_only_s23/fish-swim/mjx_gate.json",
+            "local": "runs/results/mjx_gates_chaos_diag/fish-swim/obs_noise_only_tiny_s23/mjx_gate.json"
+          },
+          {
+            "remote": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_obs_noise_only_s23/mjx_gate_summary.json",
+            "local": "runs/results/mjx_gates_chaos_diag/fish-swim/obs_noise_only_tiny_s23/mjx_gate_summary.json"
+          }
+        ]
+      },
+      {
+        "run_id": "gate_repair__fish-swim__delay_jitter__tiny_s23",
+        "env_id": "fish-swim",
+        "regime": "chaos",
+        "method": "mjx_gate_tiny_delay_jitter",
+        "seed": 23,
+        "priority": 4,
+        "script": "scripts/ncc_mjx_gate.sbatch",
+        "remote_out_dir": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_delay_jitter_s23",
+        "gate_path": "runs/results/mjx_gates_chaos_diag/fish-swim/delay_jitter_tiny_s23/mjx_gate.json",
+        "env": {
+          "TASKS": "fish-swim",
+          "OUT_DIR": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_delay_jitter_s23",
+          "SEED": "23",
+          "NUM_ENVS": "1",
+          "STEPS": "4",
+          "RESET_POOL_SIZE": "1",
+          "CHAOS": "true",
+          "ENABLE_DOMAIN_RANDOMIZATION": "true",
+          "ENABLE_OBSERVATION_NOISE": "false",
+          "BASE_ACTION_DELAY": "1",
+          "WIND_SCALE": "0.0",
+          "PUSH_SCALE": "0.0",
+          "SLIP_SCALE": "0.0",
+          "JITTER_PROB": "0.02"
+        },
+        "artifacts": [
+          {
+            "remote": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_delay_jitter_s23/fish-swim/mjx_gate.json",
+            "local": "runs/results/mjx_gates_chaos_diag/fish-swim/delay_jitter_tiny_s23/mjx_gate.json"
+          },
+          {
+            "remote": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_delay_jitter_s23/mjx_gate_summary.json",
+            "local": "runs/results/mjx_gates_chaos_diag/fish-swim/delay_jitter_tiny_s23/mjx_gate_summary.json"
+          }
+        ]
+      },
+      {
+        "run_id": "gate_repair__fish-swim__wind_only__tiny_s23",
+        "env_id": "fish-swim",
+        "regime": "chaos",
+        "method": "mjx_gate_tiny_wind_only",
+        "seed": 23,
+        "priority": 5,
+        "script": "scripts/ncc_mjx_gate.sbatch",
+        "remote_out_dir": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_wind_only_s23",
+        "gate_path": "runs/results/mjx_gates_chaos_diag/fish-swim/wind_only_tiny_s23/mjx_gate.json",
+        "env": {
+          "TASKS": "fish-swim",
+          "OUT_DIR": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_wind_only_s23",
+          "SEED": "23",
+          "NUM_ENVS": "1",
+          "STEPS": "4",
+          "RESET_POOL_SIZE": "1",
+          "CHAOS": "true",
+          "ENABLE_DOMAIN_RANDOMIZATION": "true",
+          "ENABLE_OBSERVATION_NOISE": "false",
+          "BASE_ACTION_DELAY": "0",
+          "WIND_SCALE": "5.0",
+          "PUSH_SCALE": "0.0",
+          "SLIP_SCALE": "0.0",
+          "JITTER_PROB": "0.0"
+        },
+        "artifacts": [
+          {
+            "remote": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_wind_only_s23/fish-swim/mjx_gate.json",
+            "local": "runs/results/mjx_gates_chaos_diag/fish-swim/wind_only_tiny_s23/mjx_gate.json"
+          },
+          {
+            "remote": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_wind_only_s23/mjx_gate_summary.json",
+            "local": "runs/results/mjx_gates_chaos_diag/fish-swim/wind_only_tiny_s23/mjx_gate_summary.json"
+          }
+        ]
+      },
+      {
+        "run_id": "gate_repair__fish-swim__push_only__tiny_s23",
+        "env_id": "fish-swim",
+        "regime": "chaos",
+        "method": "mjx_gate_tiny_push_only",
+        "seed": 23,
+        "priority": 6,
+        "script": "scripts/ncc_mjx_gate.sbatch",
+        "remote_out_dir": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_push_only_s23",
+        "gate_path": "runs/results/mjx_gates_chaos_diag/fish-swim/push_only_tiny_s23/mjx_gate.json",
+        "env": {
+          "TASKS": "fish-swim",
+          "OUT_DIR": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_push_only_s23",
+          "SEED": "23",
+          "NUM_ENVS": "1",
+          "STEPS": "4",
+          "RESET_POOL_SIZE": "1",
+          "CHAOS": "true",
+          "ENABLE_DOMAIN_RANDOMIZATION": "true",
+          "ENABLE_OBSERVATION_NOISE": "false",
+          "BASE_ACTION_DELAY": "0",
+          "WIND_SCALE": "0.0",
+          "PUSH_SCALE": "25.0",
+          "SLIP_SCALE": "0.0",
+          "JITTER_PROB": "0.0"
+        },
+        "artifacts": [
+          {
+            "remote": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_push_only_s23/fish-swim/mjx_gate.json",
+            "local": "runs/results/mjx_gates_chaos_diag/fish-swim/push_only_tiny_s23/mjx_gate.json"
+          },
+          {
+            "remote": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_push_only_s23/mjx_gate_summary.json",
+            "local": "runs/results/mjx_gates_chaos_diag/fish-swim/push_only_tiny_s23/mjx_gate_summary.json"
+          }
+        ]
+      },
+      {
+        "run_id": "gate_repair__fish-swim__push_decay__tiny_s23",
+        "env_id": "fish-swim",
+        "regime": "chaos",
+        "method": "mjx_gate_tiny_push_decay",
+        "seed": 23,
+        "priority": 7,
+        "script": "scripts/ncc_mjx_gate.sbatch",
+        "remote_out_dir": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_push_decay_s23",
+        "gate_path": "runs/results/mjx_gates_chaos_diag/fish-swim/push_decay_tiny_s23/mjx_gate.json",
+        "env": {
+          "TASKS": "fish-swim",
+          "OUT_DIR": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_push_decay_s23",
+          "SEED": "23",
+          "NUM_ENVS": "1",
+          "STEPS": "4",
+          "RESET_POOL_SIZE": "1",
+          "CHAOS": "true",
+          "ENABLE_DOMAIN_RANDOMIZATION": "true",
+          "ENABLE_OBSERVATION_NOISE": "false",
+          "BASE_ACTION_DELAY": "0",
+          "WIND_SCALE": "0.0",
+          "PUSH_SCALE": "25.0",
+          "SLIP_SCALE": "0.15",
+          "JITTER_PROB": "0.0"
+        },
+        "artifacts": [
+          {
+            "remote": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_push_decay_s23/fish-swim/mjx_gate.json",
+            "local": "runs/results/mjx_gates_chaos_diag/fish-swim/push_decay_tiny_s23/mjx_gate.json"
+          },
+          {
+            "remote": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_push_decay_s23/mjx_gate_summary.json",
+            "local": "runs/results/mjx_gates_chaos_diag/fish-swim/push_decay_tiny_s23/mjx_gate_summary.json"
+          }
+        ]
+      },
+      {
+        "run_id": "gate_repair__fish-swim__chaos__diagnostic_s23",
+        "env_id": "fish-swim",
+        "regime": "chaos",
+        "method": "mjx_gate_tiny_full_chaos",
+        "seed": 23,
+        "priority": 8,
+        "script": "scripts/ncc_mjx_gate.sbatch",
+        "remote_out_dir": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_full_chaos_s23",
+        "gate_path": "runs/results/mjx_gates_chaos_diag/fish-swim/full_chaos_tiny_s23/mjx_gate.json",
+        "env": {
+          "TASKS": "fish-swim",
+          "OUT_DIR": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_full_chaos_s23",
+          "SEED": "23",
+          "NUM_ENVS": "1",
+          "STEPS": "4",
+          "RESET_POOL_SIZE": "1",
+          "CHAOS": "true"
+        },
+        "artifacts": [
+          {
+            "remote": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_full_chaos_s23/fish-swim/mjx_gate.json",
+            "local": "runs/results/mjx_gates_chaos_diag/fish-swim/full_chaos_tiny_s23/mjx_gate.json"
+          },
+          {
+            "remote": "/tmp/tdmpc2-jax-corl-v3/fish_tiny_full_chaos_s23/mjx_gate_summary.json",
+            "local": "runs/results/mjx_gates_chaos_diag/fish-swim/full_chaos_tiny_s23/mjx_gate_summary.json"
+          }
+        ]
+      }
+    ]
+  },
+  "profile_gates": [],
+  "launch_phases": [
+    {
+      "name": "existing_env_extra_seeds",
+      "description": "Add seeds 23/31/42 for the five retained original environments after removing fish-swim.",
+      "selectors": [
+        {
+          "env_id": [
+            "quadruped-run",
+            "cheetah-run",
+            "hopper-hop",
+            "finger-turn_hard",
+            "cartpole-swingup"
+          ],
+          "seed": [
+            23,
+            31,
+            42
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ready_extra_envs",
+      "description": "Run acrobot-swingup and walker-run for all six seeds after the base matrix extension is healthy.",
+      "selectors": [
+        {
+          "env_id": [
+            "acrobot-swingup",
+            "walker-run"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ported_extra_envs",
+      "description": "Run pendulum-swingup, reacher-hard, and cup-catch only after their MJX ports and gates exist and pass.",
+      "selectors": [
+        {
+          "env_id": [
+            "pendulum-swingup",
+            "reacher-hard",
+            "cup-catch"
+          ]
+        }
+      ]
+    }
+  ],
+  "eta": {
+    "observed_parallel_efficiency": 0.7973,
+    "source": "v2 observed wall-clock utilization"
+  }
+}

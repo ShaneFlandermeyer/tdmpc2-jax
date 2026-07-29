@@ -4,6 +4,7 @@ import warnings
 import gymnasium as gym
 
 from tdmpc2_jax.envs.wrappers.pixels import PixelWrapper
+from tdmpc2_jax.envs.mjx_dmc import make_mjx_dmc_env
 
 def missing_dependencies(task):
 	raise ValueError(f'Missing dependencies for task {task}; install dependencies to use this environment.')

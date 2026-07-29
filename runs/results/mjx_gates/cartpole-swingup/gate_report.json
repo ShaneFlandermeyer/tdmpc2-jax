@@ -1,0 +1,43 @@
+{
+  "task": "cartpole-swingup",
+  "seed": 0,
+  "num_envs": 4,
+  "steps": 4,
+  "chaos": false,
+  "passed": true,
+  "observation_shape": [
+    4,
+    5
+  ],
+  "observation_dim": 5,
+  "action_shape": [
+    1
+  ],
+  "action_dim": 1,
+  "physics_substeps_per_control": 1,
+  "reward_sum": 0.0007328422507271171,
+  "reward_mean": 4.5802640670444816e-05,
+  "reward_min": 1.650854670742774e-07,
+  "reward_max": 0.00023394163872580975,
+  "reward_finite": true,
+  "observation_finite": true,
+  "terminated_counts": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "truncated_counts": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "dmcontrol_reference": {
+    "available": true,
+    "reward_sum": 1.6094018709976343e-05,
+    "reward_mean": 4.023504677494086e-06,
+    "reward_finite": true
+  },
+  "jax_backend": "gpu"
+}

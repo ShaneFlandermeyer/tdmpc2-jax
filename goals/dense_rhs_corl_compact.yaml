@@ -1,0 +1,163 @@
+{
+  "name": "dense_rhs_corl_compact",
+  "description": "Compact CoRL campaign for adaptive Dense-RHS vs paper-horizon TD-MPC2-JAX under clean and chaos MJX conditions.",
+  "remote": {
+    "host": "ncc-gpu1",
+    "path": "/home/goncalo/git/horizonsearch/tdmpc2-jax-codex",
+    "steward_job_prefix": "tdmpc2-jax-corl"
+  },
+  "tracking": {
+    "ledger": "experiments/corl_compact_ledger.csv",
+    "decisions": "experiments/corl_compact_decisions.md",
+    "results_dir": "runs/results/corl_compact"
+  },
+  "constraints": {
+    "max_active_gpus": 4,
+    "physical_gpu_free_util_pct": 10,
+    "physical_gpu_free_mem_mib": 1024,
+    "require_clean_local_git": true,
+    "require_clean_remote_git": true,
+    "require_remote_commit_match": true,
+    "require_checkpoint_resume_smoke": true,
+    "max_retries": 2,
+    "full_run_steps": 500000,
+    "paper_horizon": 3
+  },
+  "matrix": {
+    "envs": [
+      {
+        "env_id": "quadruped-run",
+        "gate": "built_in",
+        "reason": "hardest supported high-dimensional locomotion"
+      },
+      {
+        "env_id": "cheetah-run",
+        "gate": "runs/results/mjx_gates/cheetah-run/mjx_gate.json",
+        "reason": "standard fast locomotion baseline"
+      },
+      {
+        "env_id": "hopper-hop",
+        "gate": "runs/results/mjx_gates/hopper-hop/mjx_gate.json",
+        "reason": "contact-heavy balance locomotion"
+      },
+      {
+        "env_id": "finger-turn_hard",
+        "gate": "runs/results/mjx_gates/finger-turn_hard/mjx_gate.json",
+        "reason": "precision manipulation-style task"
+      },
+      {
+        "env_id": "fish-swim",
+        "gate": "runs/results/mjx_gates/fish-swim/mjx_gate.json",
+        "reason": "distinct morphology, already MJX-gated"
+      },
+      {
+        "env_id": "cartpole-swingup",
+        "gate": "runs/results/mjx_gates/cartpole-swingup/mjx_gate.json",
+        "reason": "canonical low-dimensional underactuated control"
+      }
+    ],
+    "regimes": {
+      "clean": {
+        "enable_domain_randomization": false,
+        "enable_observation_noise": false,
+        "base_action_delay": 0
+      },
+      "chaos": {
+        "enable_domain_randomization": true,
+        "enable_observation_noise": true,
+        "base_action_delay": 1
+      }
+    },
+    "methods": [
+      "paper_horizon",
+      "adaptive_rhs"
+    ],
+    "seeds": [
+      1,
+      7,
+      15
+    ],
+    "launch_seed_priority": [
+      15,
+      1,
+      7
+    ]
+  },
+  "run_defaults": {
+    "max_steps": 500000,
+    "save_interval_steps": 50000,
+    "checkpoint_buffer": true,
+    "eval_interval_steps": 50000,
+    "eval_num_episodes": 20,
+    "train_num_envs": 8,
+    "seed_steps_override": 4000,
+    "update_chunk_size": 128,
+    "collect_chunk_steps": 100,
+    "utd_ratio": 1.0,
+    "reset_pool_size": 64,
+    "paper_horizon": 3
+  },
+  "adaptive_rhs": {
+    "method_name": "dense_rhs_sparse_hifi",
+    "initial_horizon": 3,
+    "horizons": "[2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30]",
+    "hmax": 30,
+    "query_start_step": 70000,
+    "query_interval_steps": 50000,
+    "num_env_eval_replicas": 16,
+    "env_eval_steps": 256,
+    "query_population_size": 256,
+    "query_policy_prior_samples": 12,
+    "query_num_elites": 32,
+    "query_mppi_iterations": 4,
+    "query_temperature": 0.5,
+    "selection_return_power": 4.0,
+    "roughness_weight": 1.0,
+    "return_std_weight": 1.0,
+    "local_window_radius": 1,
+    "max_transition_delta": 1,
+    "incumbent_switch_margin": 0.05,
+    "horizon_buckets": "[4,8,12,16,24,30]",
+    "candidate_budget": {
+      "A": 3,
+      "B1": 3,
+      "B2": 3,
+      "B3": 3,
+      "B4": 3
+    }
+  },
+  "setup_smoke": {
+    "run_id": "setup_checkpoint_resume_smoke",
+    "env_id": "cartpole-swingup",
+    "seed": 15,
+    "script": "scripts/ncc_corl_checkpoint_resume_smoke.sbatch",
+    "run_dir": "outputs/corl_pub_setup/checkpoint_resume_smoke",
+    "required_result": "resume_verified.json"
+  },
+  "published_tdmpc2_scores": {
+    "quadruped-run": null,
+    "cheetah-run": null,
+    "hopper-hop": null,
+    "finger-turn_hard": null,
+    "fish-swim": null,
+    "cartpole-swingup": null
+  },
+  "artifacts": {
+    "figures": [
+      "fig1_clean_learning_curves",
+      "fig2_chaos_learning_curves",
+      "fig3_time_to_parity",
+      "fig4_compute_performance"
+    ],
+    "tables": [
+      "main_final_scores",
+      "main_auc_scores",
+      "parity_times",
+      "compute_runtime"
+    ],
+    "report": [
+      "corl_compact_base_report.md",
+      "corl_compact_base_report.tex"
+    ]
+  }
+}

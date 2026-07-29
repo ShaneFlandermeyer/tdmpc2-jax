@@ -1,0 +1,456 @@
+{
+  "passed": true,
+  "tasks": [
+    {
+      "task": "acrobot-swingup",
+      "seed": 0,
+      "num_envs": 4,
+      "steps": 4,
+      "chaos": false,
+      "passed": true,
+      "observation_shape": [
+        4,
+        6
+      ],
+      "observation_dim": 6,
+      "action_shape": [
+        1
+      ],
+      "action_dim": 1,
+      "physics_substeps_per_control": 1,
+      "reward_sum": 16.080825805664062,
+      "reward_mean": 1.005051612854004,
+      "reward_min": 0.007983320392668247,
+      "reward_max": 1.9994046688079834,
+      "reward_finite": true,
+      "observation_finite": true,
+      "terminated_counts": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "truncated_counts": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "dmcontrol_reference": {
+        "available": true,
+        "reward_sum": 0.0185533659115572,
+        "reward_mean": 0.0046383414778893,
+        "reward_finite": true
+      },
+      "jax_backend": "gpu"
+    },
+    {
+      "task": "cartpole-swingup",
+      "seed": 0,
+      "num_envs": 4,
+      "steps": 4,
+      "chaos": false,
+      "passed": true,
+      "observation_shape": [
+        4,
+        5
+      ],
+      "observation_dim": 5,
+      "action_shape": [
+        1
+      ],
+      "action_dim": 1,
+      "physics_substeps_per_control": 1,
+      "reward_sum": 0.0007328422507271171,
+      "reward_mean": 4.5802640670444816e-05,
+      "reward_min": 1.650854670742774e-07,
+      "reward_max": 0.00023394163872580975,
+      "reward_finite": true,
+      "observation_finite": true,
+      "terminated_counts": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "truncated_counts": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "dmcontrol_reference": {
+        "available": true,
+        "reward_sum": 1.6094018709976343e-05,
+        "reward_mean": 4.023504677494086e-06,
+        "reward_finite": true
+      },
+      "jax_backend": "gpu"
+    },
+    {
+      "task": "cheetah-run",
+      "seed": 0,
+      "num_envs": 4,
+      "steps": 4,
+      "chaos": false,
+      "passed": true,
+      "observation_shape": [
+        4,
+        17
+      ],
+      "observation_dim": 17,
+      "action_shape": [
+        6
+      ],
+      "action_dim": 6,
+      "physics_substeps_per_control": 2,
+      "reward_sum": 0.2489941120147705,
+      "reward_mean": 0.015562132000923157,
+      "reward_min": 0.0,
+      "reward_max": 0.06436300277709961,
+      "reward_finite": true,
+      "observation_finite": true,
+      "terminated_counts": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "truncated_counts": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "dmcontrol_reference": {
+        "available": true,
+        "reward_sum": 0.0,
+        "reward_mean": 0.0,
+        "reward_finite": true
+      },
+      "jax_backend": "gpu"
+    },
+    {
+      "task": "cup-catch",
+      "seed": 0,
+      "num_envs": 4,
+      "steps": 4,
+      "chaos": false,
+      "passed": true,
+      "observation_shape": [
+        4,
+        8
+      ],
+      "observation_dim": 8,
+      "action_shape": [
+        2
+      ],
+      "action_dim": 2,
+      "physics_substeps_per_control": 10,
+      "reward_sum": 0.0,
+      "reward_mean": 0.0,
+      "reward_min": 0.0,
+      "reward_max": 0.0,
+      "reward_finite": true,
+      "observation_finite": true,
+      "first_nonfinite": null,
+      "terminated_counts": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "truncated_counts": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "dmcontrol_reference": {
+        "available": true,
+        "reward_sum": 0.0,
+        "reward_mean": 0.0,
+        "reward_finite": true
+      },
+      "jax_backend": "gpu",
+      "chaos_params": {
+        "enable_domain_randomization": false,
+        "enable_observation_noise": false,
+        "base_action_delay": 0,
+        "observation_noise_scale": 0.01,
+        "wind_scale": 5.0,
+        "push_scale": 25.0,
+        "slip_scale": 0.15,
+        "jitter_prob": 0.02
+      }
+    },
+    {
+      "task": "finger-turn_hard",
+      "seed": 0,
+      "num_envs": 2,
+      "steps": 1,
+      "chaos": false,
+      "passed": true,
+      "observation_shape": [
+        2,
+        12
+      ],
+      "observation_dim": 12,
+      "action_shape": [
+        2
+      ],
+      "action_dim": 2,
+      "physics_substeps_per_control": 2,
+      "reward_sum": 0.0,
+      "reward_mean": 0.0,
+      "reward_min": 0.0,
+      "reward_max": 0.0,
+      "reward_finite": true,
+      "observation_finite": true,
+      "terminated_counts": [
+        0
+      ],
+      "truncated_counts": [
+        0
+      ],
+      "dmcontrol_reference": {
+        "available": true,
+        "reward_sum": 0.0,
+        "reward_mean": 0.0,
+        "reward_finite": true
+      },
+      "jax_backend": "gpu"
+    },
+    {
+      "task": "fish-swim",
+      "seed": 0,
+      "num_envs": 2,
+      "steps": 1,
+      "chaos": false,
+      "passed": true,
+      "observation_shape": [
+        2,
+        24
+      ],
+      "observation_dim": 24,
+      "action_shape": [
+        5
+      ],
+      "action_dim": 5,
+      "physics_substeps_per_control": 10,
+      "reward_sum": 0.4742293953895569,
+      "reward_mean": 0.23711469769477844,
+      "reward_min": 0.23698794841766357,
+      "reward_max": 0.2372414469718933,
+      "reward_finite": true,
+      "observation_finite": true,
+      "terminated_counts": [
+        0
+      ],
+      "truncated_counts": [
+        0
+      ],
+      "dmcontrol_reference": {
+        "available": true,
+        "reward_sum": 0.11858412610438328,
+        "reward_mean": 0.11858412610438328,
+        "reward_finite": true
+      },
+      "jax_backend": "gpu"
+    },
+    {
+      "task": "hopper-hop",
+      "seed": 0,
+      "num_envs": 4,
+      "steps": 4,
+      "chaos": false,
+      "passed": true,
+      "observation_shape": [
+        4,
+        15
+      ],
+      "observation_dim": 15,
+      "action_shape": [
+        4
+      ],
+      "action_dim": 4,
+      "physics_substeps_per_control": 4,
+      "reward_sum": 0.0,
+      "reward_mean": 0.0,
+      "reward_min": 0.0,
+      "reward_max": 0.0,
+      "reward_finite": true,
+      "observation_finite": true,
+      "terminated_counts": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "truncated_counts": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "dmcontrol_reference": {
+        "available": true,
+        "reward_sum": 0.0,
+        "reward_mean": 0.0,
+        "reward_finite": true
+      },
+      "jax_backend": "gpu"
+    },
+    {
+      "task": "pendulum-swingup",
+      "seed": 0,
+      "num_envs": 4,
+      "steps": 4,
+      "chaos": false,
+      "passed": true,
+      "observation_shape": [
+        4,
+        3
+      ],
+      "observation_dim": 3,
+      "action_shape": [
+        1
+      ],
+      "action_dim": 1,
+      "physics_substeps_per_control": 1,
+      "reward_sum": 0.0,
+      "reward_mean": 0.0,
+      "reward_min": 0.0,
+      "reward_max": 0.0,
+      "reward_finite": true,
+      "observation_finite": true,
+      "first_nonfinite": null,
+      "terminated_counts": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "truncated_counts": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "dmcontrol_reference": {
+        "available": true,
+        "reward_sum": 0.0,
+        "reward_mean": 0.0,
+        "reward_finite": true
+      },
+      "jax_backend": "gpu",
+      "chaos_params": {
+        "enable_domain_randomization": false,
+        "enable_observation_noise": false,
+        "base_action_delay": 0,
+        "observation_noise_scale": 0.01,
+        "wind_scale": 5.0,
+        "push_scale": 25.0,
+        "slip_scale": 0.15,
+        "jitter_prob": 0.02
+      }
+    },
+    {
+      "task": "reacher-hard",
+      "seed": 0,
+      "num_envs": 4,
+      "steps": 4,
+      "chaos": false,
+      "passed": true,
+      "observation_shape": [
+        4,
+        6
+      ],
+      "observation_dim": 6,
+      "action_shape": [
+        2
+      ],
+      "action_dim": 2,
+      "physics_substeps_per_control": 1,
+      "reward_sum": 0.0,
+      "reward_mean": 0.0,
+      "reward_min": 0.0,
+      "reward_max": 0.0,
+      "reward_finite": true,
+      "observation_finite": true,
+      "first_nonfinite": null,
+      "terminated_counts": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "truncated_counts": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "dmcontrol_reference": {
+        "available": true,
+        "reward_sum": 0.0,
+        "reward_mean": 0.0,
+        "reward_finite": true
+      },
+      "jax_backend": "gpu",
+      "chaos_params": {
+        "enable_domain_randomization": false,
+        "enable_observation_noise": false,
+        "base_action_delay": 0,
+        "observation_noise_scale": 0.01,
+        "wind_scale": 5.0,
+        "push_scale": 25.0,
+        "slip_scale": 0.15,
+        "jitter_prob": 0.02
+      }
+    },
+    {
+      "task": "walker-run",
+      "seed": 0,
+      "num_envs": 4,
+      "steps": 4,
+      "chaos": false,
+      "passed": true,
+      "observation_shape": [
+        4,
+        24
+      ],
+      "observation_dim": 24,
+      "action_shape": [
+        6
+      ],
+      "action_dim": 6,
+      "physics_substeps_per_control": 10,
+      "reward_sum": 4.397714138031006,
+      "reward_mean": 0.27485713362693787,
+      "reward_min": 0.22357861697673798,
+      "reward_max": 0.33022183179855347,
+      "reward_finite": true,
+      "observation_finite": true,
+      "terminated_counts": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "truncated_counts": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "dmcontrol_reference": {
+        "available": true,
+        "reward_sum": 0.665650560516704,
+        "reward_mean": 0.166412640129176,
+        "reward_finite": true
+      },
+      "jax_backend": "gpu"
+    }
+  ]
+}

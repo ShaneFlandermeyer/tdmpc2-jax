@@ -1,0 +1,46 @@
+\section{Dense-RHS Campaign Report}
+
+\paragraph{Goal.}
+The campaign validates Dense-RHS against no-RHS baselines under clean and chaos training, then expands the same procedure across the configured task list.
+
+\paragraph{Algorithm policy.}
+The winning algorithm must preserve online horizon selection, dense shared diagnostics across horizons, candidate-only environment evaluation, and deployment of one selected horizon between queries.
+
+\paragraph{Current winning records.}
+\begin{itemize}
+\item quadruped-run / clean / no\_rhs: final return 924.65 $\pm$ 16.91, runtime 01:15:58.
+\item quadruped-run / chaos / no\_rhs: final return 683.0 , runtime unknown.
+\item quadruped-run / clean / dense\_rhs\_sparse\_hifi: final return 922.63330078125 $\pm$ 21.33823585510254, runtime 01:31:18.
+\end{itemize}
+
+\paragraph{Top trained models by observed score.}
+\begin{itemize}
+\item job 1960, finger\_turn\_hard\_clean\_no\_rhs\_300k\_vec8\_s15: best return 980.5499877929688, final return 980.5499877929688, horizon path .
+\item job 1969, finger\_turn\_hard\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15: best return 963.8499755859375, final return 927.25, horizon path 3->3->4->4->5.
+\item job 1970, cheetah\_run\_clean\_dense\_rhs\_sparse\_hifi\_300k\_vec8\_s15: best return 933.12890625, final return 933.12890625, horizon path 4->5->6->6->6.
+\item job 1179, no\_rhs\_1179: best return 924.65, final return 924.65, horizon path .
+\item job 1663, dense\_rhs\_plus2\_sparse\_hifi\_start70\_300k\_vec8\_s15: best return 922.63330078125, final return 922.63330078125, horizon path 3->3->3->3->3.
+\item job 1709, dense\_rhs\_plus2\_h34\_start120\_margin02\_300k\_vec8\_s15: best return 919.34619140625, final return 901.8836059570312, horizon path 3->3->3->3.
+\item job 1387, dense\_rhs\_sparse\_hifi\_1387: best return 915.34, final return 915.34, horizon path 2->2->3->2->3->4.
+\item job 1717, dense\_rhs\_plus2\_fullh\_learnerproxy\_start70\_300k\_vec8\_s15: best return 912.6260986328125, final return 912.6260986328125, horizon path 3->5->7->7->9.
+\item job 1702, dense\_rhs\_plus2\_hcap4\_start120\_returnlite\_300k\_vec8\_s15: best return 908.4658203125, final return 898.8212890625, horizon path 3->3->4->3.
+\item job 1693, dense\_rhs\_plus2\_anchor\_start90\_margin06\_300k\_vec8\_s15: best return 906.2188720703125, final return 906.2188720703125, horizon path 3->4->4->5->4.
+\end{itemize}
+
+\paragraph{Open algorithm RFCs.}
+\begin{itemize}
+\item expected\_improvement\_transition: Credible probability gating was too conservative at p=.65 and too permissive for late h=5 at p=.56; expected improvement should trade benefit and loss continuously. Closed on 2026-05-04 because the user ended quadruped architecture search and selected the Sparse-HiFi winner for cross-environment evaluation.
+\item cap\_or\_uncertain\_late\_large\_horizon: Run 1618 showed h=5/bucket=8 caused final-eval collapse after a strong 250k checkpoint; larger horizon switches late in training need a general uncertainty gate. Closed on 2026-05-04 because the user ended quadruped architecture search and selected the Sparse-HiFi winner for cross-environment evaluation.
+\item sparse\_hifi\_chaos\_validation: Chaos validation is now part of the approved final table sequence, not a continuation of clean +2 architecture search.
+\item clean\_plus2\_sparse\_hifi\_parallel: The formal clean goal is now to beat no-RHS by 2\%; run two distinct Sparse-HiFi clean attempts in parallel under the max-2-GPU policy. Closed on 2026-05-04 because the user ended quadruped architecture search and selected the Sparse-HiFi winner for cross-environment evaluation.
+\item learner\_aware\_virtual\_update\_query: Current Dense-RHS mostly tests transition policy over existing diagnostics; it does not estimate whether a candidate horizon improves the learner after update. Add sparse virtual TD-MPC2 update probes for candidate horizons and score post-update validation loss/planner utility. Closed on 2026-05-04 because the user ended quadruped architecture search and selected the Sparse-HiFi winner for cross-environment evaluation.
+\item shadow\_horizon\_training\_stats: Gather better horizon evidence during ordinary training by computing shadow loss/target statistics for nearby horizons from the same replay batches, without changing deployed horizon or adding environment interaction. Closed on 2026-05-04 because the user ended quadruped architecture search and selected the Sparse-HiFi winner for cross-environment evaluation.
+\item deployment\_utility\_posterior: Replace one-shot query score switching with a posterior over observed post-switch training improvement so horizon changes are justified by downstream learner utility rather than immediate candidate rollout return alone. Closed on 2026-05-04 because the user ended quadruped architecture search and selected the Sparse-HiFi winner for cross-environment evaluation.
+\item paired\_fixed\_seed\_query\_eval: Verify or enforce paired reset seeds and matched perturbations across candidate horizons so query return differences have lower variance and are attributable to horizon choice. Closed on 2026-05-04 because the user ended quadruped architecture search and selected the Sparse-HiFi winner for cross-environment evaluation.
+\item horizon\_trust\_region\_hcap4: Jobs 1692 and 1693 plateaued or regressed after switching to h=5; test whether a small adaptive trust region H=\{2,3,4\} preserves Dense-RHS adaptivity while avoiding the empirically harmful late large-horizon transition. Closed on 2026-05-04 because the user ended quadruped architecture search and selected the Sparse-HiFi winner for cross-environment evaluation.
+\item h34\_late\_exploitation: If the H=\{2,3,4\} trust region does not beat the clean +2 target, test the smaller adaptive set H=\{3,4\}. This keeps online horizon selection but removes the empirically harmful h=5 option and avoids early downshifts to h=2. Closed on 2026-05-04 because the user ended quadruped architecture search and selected the Sparse-HiFi winner for cross-environment evaluation.
+\item full\_horizon\_evidence\_search: The final algorithm should discover the horizon online over H=\{2..30\}, not inherit a hand cap from diagnostic runs. Restore the full horizon set and improve evidence quality/transition decisions without removing candidate horizons. Closed on 2026-05-04 because the user ended quadruped architecture search and selected the Sparse-HiFi winner for cross-environment evaluation.
+\item full\_horizon\_utility\_evidence: The first full-H profiles selected larger horizons too aggressively and underperformed. Keep H=\{2..30\}, but improve evidence attribution using posterior eval-gain deployment utility and dense learner-proxy terms instead of hard horizon caps. Closed on 2026-05-04 because the user ended quadruped architecture search and selected the Sparse-HiFi winner for cross-environment evaluation.
+\item table\_driven\_multienv\_evaluation: Quadruped clean/chaos single-seed table cells are filled. Remaining scheduled environments are blocked on explicit MJX port gates before training can launch.
+\item mjx\_port\_gates: Non-quadruped environments require MJX/full-GPU ports before final table runs. This gate is now a first-class steward task rather than a passive pending\_port marker.
+\end{itemize}

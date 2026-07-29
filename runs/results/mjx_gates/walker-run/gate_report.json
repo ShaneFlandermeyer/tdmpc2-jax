@@ -1,0 +1,43 @@
+{
+  "task": "walker-run",
+  "seed": 0,
+  "num_envs": 4,
+  "steps": 4,
+  "chaos": false,
+  "passed": true,
+  "observation_shape": [
+    4,
+    24
+  ],
+  "observation_dim": 24,
+  "action_shape": [
+    6
+  ],
+  "action_dim": 6,
+  "physics_substeps_per_control": 10,
+  "reward_sum": 4.397714138031006,
+  "reward_mean": 0.27485713362693787,
+  "reward_min": 0.22357861697673798,
+  "reward_max": 0.33022183179855347,
+  "reward_finite": true,
+  "observation_finite": true,
+  "terminated_counts": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "truncated_counts": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "dmcontrol_reference": {
+    "available": true,
+    "reward_sum": 0.665650560516704,
+    "reward_mean": 0.166412640129176,
+    "reward_finite": true
+  },
+  "jax_backend": "gpu"
+}

@@ -25,11 +25,11 @@ class NormedLinear(nn.Module):
                  dtype=self.dtype,
                  param_dtype=self.param_dtype)(x)
 
-    x = nn.LayerNorm(dtype=self.dtype)(x)
-    if self.activation is not None:
-      x = self.activation(x)
-
     if self.dropout_rate is not None and self.dropout_rate > 0:
       x = nn.Dropout(rate=self.dropout_rate)(x, deterministic=not train)
+
+    x = nn.LayerNorm(epsilon=1e-5, dtype=self.dtype)(x)
+    if self.activation is not None:
+      x = self.activation(x)
 
     return x

@@ -1,0 +1,54 @@
+{
+  "task": "fish-swim",
+  "seed": 23,
+  "num_envs": 1,
+  "steps": 4,
+  "chaos": true,
+  "passed": true,
+  "observation_shape": [
+    1,
+    24
+  ],
+  "observation_dim": 24,
+  "action_shape": [
+    5
+  ],
+  "action_dim": 5,
+  "physics_substeps_per_control": 10,
+  "reward_sum": 0.6894009709358215,
+  "reward_mean": 0.17235024273395538,
+  "reward_min": 0.17153555154800415,
+  "reward_max": 0.17297296226024628,
+  "reward_finite": true,
+  "observation_finite": true,
+  "first_nonfinite": null,
+  "terminated_counts": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "truncated_counts": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "dmcontrol_reference": {
+    "available": true,
+    "reward_sum": 0.4756283248593857,
+    "reward_mean": 0.11890708121484643,
+    "reward_finite": true
+  },
+  "jax_backend": "gpu",
+  "chaos_params": {
+    "enable_domain_randomization": true,
+    "enable_observation_noise": false,
+    "base_action_delay": 0,
+    "observation_noise_scale": 0.01,
+    "wind_scale": 0.0,
+    "push_scale": 0.0,
+    "slip_scale": 0.0,
+    "jitter_prob": 0.0
+  }
+}

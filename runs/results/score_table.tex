@@ -1,0 +1,73 @@
+\begin{tabular}{llllrrrrl}
+\toprule
+Environment & Regime & Method & Seeds & Final mean & Final std & Best mean & Runtime & Horizon path \\
+\midrule
+acrobot-swingup & chaos & dense\_rhs\_sparse\_hifi & 15 & 353.9346923828125 & 109.49887084960938 & 379.4981994628906 & 01:16:17 & 4->4->4->4->4 \\
+acrobot-swingup & chaos & no\_rhs & 15 & 292.6933288574219 & 96.26347351074219 & 329.11444091796875 & 01:08:01 &  \\
+acrobot-swingup & clean & dense\_rhs\_sparse\_hifi & 15 & 362.320556640625 & 108.22805786132812 & 575.4118041992188 & 00:59:31 & 3->3->3->3->3 \\
+acrobot-swingup & clean & no\_rhs & 15 & 539.5477294921875 & 162.24920654296875 & 539.5477294921875 & 00:50:35 &  \\
+cartpole-swingup & chaos & dense\_rhs\_sparse\_hifi & 15 & 876.3756103515625 & 1.726609706878662 & 876.3756103515625 & 01:19:03 & 3->3->3->2->3 \\
+cartpole-swingup & chaos & no\_rhs & 15 & 855.3677978515625 & 2.8434972763061523 & 855.3677978515625 & 01:10:06 &  \\
+cartpole-swingup & clean & dense\_rhs\_sparse\_hifi & 15 & 882.39404296875 & 0.22589746117591858 & 882.39404296875 & 01:10:34 & 4->4->5->4->3 \\
+cartpole-swingup & clean & no\_rhs & 15 & 866.7747192382812 & 0.26454320549964905 & 867.5153198242188 & 00:52:26 &  \\
+cheetah-run & chaos & dense\_rhs\_sparse\_hifi & 15 & 491.46044921875 & 76.12613677978516 & 491.46044921875 & 01:31:02 & 3->4->3->4->5 \\
+cheetah-run & chaos & no\_rhs & 15 & 457.7344665527344 & 76.45452117919922 & 457.7344665527344 & 01:13:47 &  \\
+cheetah-run & clean & dense\_rhs\_sparse\_hifi & 15 & 933.12890625 & 37.509788513183594 & 933.12890625 & 01:19:14 & 4->5->6->6->6 \\
+cheetah-run & clean & no\_rhs & 15 & 845.8548583984375 & 116.47073364257812 & 871.3776245117188 & 00:56:55 &  \\
+finger-turn\_hard & chaos & no\_rhs & 15 & 713.4000244140625 & 403.3861083984375 & 713.4000244140625 & 01:13:09 &  \\
+finger-turn\_hard & chaos & dense\_rhs\_sparse\_hifi & 15 & 688.5999755859375 & 405.9638671875 & 688.5999755859375 & 01:24:19 & 3->3->3->3->3 \\
+finger-turn\_hard & clean & no\_rhs & 15 & 980.5499877929688 & 13.987404823303223 & 980.5499877929688 & 00:56:55 &  \\
+finger-turn\_hard & clean & dense\_rhs\_sparse\_hifi & 15 & 927.25 & 102.99022674560547 & 963.8499755859375 & 01:11:50 & 3->3->4->4->5 \\
+fish-swim & chaos & dense\_rhs\_sparse\_hifi & 15 & 76.80537414550781 & 35.97894287109375 & 90.21401977539062 & 01:19:01 & 3->3->3->3->3 \\
+fish-swim & chaos & no\_rhs & 15 & 73.97637939453125 & 35.65225601196289 & 82.80696105957031 & 01:10:46 &  \\
+fish-swim & clean & dense\_rhs\_sparse\_hifi & 15 & 596.9766845703125 & 232.79652404785156 & 708.2169189453125 & 01:03:36 & 3->3->3->3->3 \\
+fish-swim & clean & no\_rhs & 15 & 505.16326904296875 & 284.06915283203125 & 596.1466064453125 & 00:53:38 &  \\
+hopper-hop & chaos & no\_rhs & 15 & 198.45770263671875 & 7.539370059967041 & 198.45770263671875 & 01:19:11 &  \\
+hopper-hop & chaos & dense\_rhs\_sparse\_hifi & 15 & 173.11436462402344 & 9.265361785888672 & 173.11436462402344 & 01:31:31 & 2->2->2->3->3 \\
+hopper-hop & clean & dense\_rhs\_sparse\_hifi & 15 & 350.6131896972656 & 12.311149597167969 & 351.2184143066406 & 01:16:29 & 2->2->3->2->3 \\
+hopper-hop & clean & no\_rhs & 15 & 287.27569580078125 & 14.467547416687012 & 287.27569580078125 & 01:06:43 &  \\
+quadruped-run & chaos & no\_rhs & 15 & 683.0 &  & 683.0 & unknown &  \\
+quadruped-run & chaos & dense\_rhs\_sparse\_hifi & 15 & 614.44970703125 & 44.561885833740234 & 614.44970703125 & 01:48:24 & 3->2->2->2->3 \\
+quadruped-run & chaos & no\_rhs & 15 & 505.26690673828125 & 35.0055046081543 & 590.1742553710938 & 01:30:18 &  \\
+quadruped-run & chaos & dense\_rhs\_sparse\_hifi & 15 &  &  &  & 00:07:22 &  \\
+quadruped-run & clean & no\_rhs & 15 & 924.65 & 16.91 & 924.65 & 01:15:58 &  \\
+quadruped-run & clean & dense\_rhs\_sparse\_hifi & 15 & 922.63330078125 & 21.33823585510254 & 922.63330078125 & 01:31:18 & 3->3->3->3->3 \\
+quadruped-run & clean & dense\_rhs\_h34\_late\_exploitation & 15 & 901.8836059570312 & 34.625823974609375 & 919.34619140625 & 01:24:34 & 3->3->3->3 \\
+quadruped-run & clean & dense\_rhs\_sparse\_hifi & 15 & 915.34 & 24.33 & 915.34 & 01:29:59 & 2->2->3->2->3->4 \\
+quadruped-run & clean & dense\_rhs\_full\_horizon\_learner\_proxy & 15 & 912.6260986328125 & 29.712343215942383 & 912.6260986328125 & 01:49:03 & 3->5->7->7->9 \\
+quadruped-run & clean & dense\_rhs\_horizon\_trust\_region & 15 & 898.8212890625 & 24.93979263305664 & 908.4658203125 & 01:25:30 & 3->3->4->3 \\
+quadruped-run & clean & dense\_rhs\_sparse\_hifi & 15 & 906.2188720703125 & 31.46767234802246 & 906.2188720703125 & 01:47:01 & 3->4->4->5->4 \\
+quadruped-run & clean & dense\_rhs\_h34\_late\_exploitation & 15 & 904.8642578125 & 23.15458106994629 & 904.8642578125 & 01:24:12 & 4->4->4 \\
+quadruped-run & clean & dense\_rhs\_sparse\_hifi & 15 & 901.0157470703125 & 17.160640716552734 & 901.0157470703125 & 01:31:16 & 2->2->3->4->4->4 \\
+quadruped-run & clean & dense\_rhs\_h34\_late\_exploitation\_ei & 15 & 899.6385498046875 & 24.435571670532227 & 899.6385498046875 & 01:23:55 & 3->3->3->3 \\
+quadruped-run & clean & dense\_rhs\_sparse\_hifi & 15 & 898.3875122070312 & 21.15914535522461 & 898.3875122070312 & 01:47:51 & 4->3->4->5->5 \\
+quadruped-run & clean & dense\_rhs\_horizon\_trust\_region & 15 & 896.6925048828125 & 20.500463485717773 & 896.6925048828125 & 01:25:44 & 3->3->2->2->3 \\
+quadruped-run & clean & dense\_rhs\_credible\_mid\_p56\_c003 & 15 & 516.52 & 323.68 & 894.1 & 01:38:32 & 3->3->4->4->4->5 \\
+quadruped-run & clean & dense\_rhs\_credible\_p65\_c006 & 15 & 889.66 & 22.17 & 889.66 & 01:26:10 & 3->3->3->3->3->3 \\
+quadruped-run & clean & dense\_rhs\_sparse\_hifi & 15 & 884.75537109375 & 28.268857955932617 & 884.75537109375 & 02:00:12 & 3->4->5->5->6 \\
+quadruped-run & clean & dense\_rhs\_full\_horizon\_ei & 15 & 879.5133056640625 & 28.175579071044922 & 879.5133056640625 & 01:43:33 & 5->7->7->7->7 \\
+quadruped-run & clean & dense\_rhs\_deployment\_utility\_posterior & 15 & 863.4307861328125 & 28.056758880615234 & 863.4307861328125 & 01:24:33 & 2->2->2->2->2 \\
+quadruped-run & clean & dense\_rhs\_sparse\_hifi & 15 & 855.7972412109375 & 17.007858276367188 & 855.7972412109375 & 01:35:10 & 3->2->3->2->3 \\
+quadruped-run & clean & dense\_rhs\_sparse\_hifi & 15 & 849.2491455078125 & 15.82135009765625 & 849.2491455078125 & 01:56:26 & 3->3->4->5->5->4 \\
+quadruped-run & clean & dense\_rhs\_full\_horizon\_evidence & 15 & 837.6513671875 & 28.396848678588867 & 837.6513671875 & 01:39:11 & 4->3->5->5->7 \\
+quadruped-run & clean & dense\_rhs\_full\_horizon\_utility\_learner\_proxy & 15 & 834.3712768554688 & 20.812170028686523 & 834.3712768554688 & 01:27:42 & 3->4->4->4->4 \\
+quadruped-run & clean & dense\_rhs\_sparse\_hifi & 15 & 831.63916015625 & 21.24997901916504 & 831.63916015625 & 01:34:51 & 2->2->3->3 \\
+quadruped-run & clean & dense\_rhs\_full\_horizon\_deployment\_utility & 15 & 826.55810546875 & 19.581214904785156 & 826.55810546875 & 01:27:59 & 2->2->2->2->2 \\
+quadruped-run & clean & dense\_rhs\_sparse\_hifi & 15 & 729.8106079101562 & 17.057329177856445 & 740.24560546875 & 02:07:45 & 3->4->5->6->6 \\
+quadruped-run & clean & dense\_rhs\_shadow\_probe & 15 & 684.2154541015625 & 26.09765625 & 684.2154541015625 & 00:48:44 & 3->3 \\
+quadruped-run & clean & dense\_rhs\_sparse\_hifi & 15 & 640.4043579101562 & 58.951446533203125 & 640.4043579101562 & 00:56:30 & 2->2 \\
+quadruped-run & clean & dense\_rhs\_shadow\_probe & 15 & 578.2000732421875 & 16.3250789642334 & 578.2000732421875 & 00:47:00 & 2->2 \\
+quadruped-run & clean & dense\_rhs\_expected\_improvement & 15 & 463.6806945800781 & 129.16029357910156 & 463.6806945800781 & 00:43:00 & 3->3->3 \\
+quadruped-run & clean & dense\_rhs\_expected\_improvement & 15 & 286.9360656738281 & 150.44711303710938 & 286.9360656738281 & 00:41:16 & 2->2->2 \\
+quadruped-run & clean & dense\_rhs\_shadow\_probe & 15 & 274.5364074707031 & 156.55780029296875 & 274.5364074707031 & 00:30:43 & 3 \\
+quadruped-run & clean & dense\_rhs\_sparse\_hifi & 15 & 262.2226867675781 & 118.21903228759766 & 262.2226867675781 & 00:44:08 & 3->4 \\
+quadruped-run & clean & dense\_rhs\_expected\_improvement & 15 & 241.28457641601562 & 123.68336486816406 & 241.28457641601562 & 00:39:23 & 3->3->3 \\
+quadruped-run & clean & dense\_rhs\_sparse\_hifi & 15 & 97.265380859375 & 141.6887664794922 & 97.265380859375 & 00:44:33 & 4 \\
+quadruped-run & clean & dense\_rhs\_shadow\_probe & 15 & 68.86866760253906 & 175.0941619873047 & 68.86866760253906 & 00:53:46 & 3->4->4 \\
+quadruped-run & clean & dense\_rhs\_horizon\_trust\_region\_ei & 15 & 46.981651306152344 & 23.216461181640625 & 46.981651306152344 & 00:34:28 & 2 \\
+walker-run & chaos & dense\_rhs\_sparse\_hifi & 15 & 579.1027221679688 & 34.14745330810547 & 627.7696533203125 & 01:54:57 & 3->3->3->4->4 \\
+walker-run & chaos & no\_rhs & 15 & 591.030029296875 & 30.23134994506836 & 591.030029296875 & 01:43:12 &  \\
+walker-run & clean & no\_rhs & 15 & 839.2001953125 & 10.541329383850098 & 839.2001953125 & 01:26:04 &  \\
+walker-run & clean & dense\_rhs\_sparse\_hifi & 15 & 835.9410400390625 & 9.586824417114258 & 835.9410400390625 & 01:38:25 & 4->3->3->4->4 \\
+\bottomrule
+\end{tabular}

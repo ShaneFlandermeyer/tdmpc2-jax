@@ -1,0 +1,227 @@
+{
+  "passed": false,
+  "tasks": [
+    {
+      "task": "fish-swim",
+      "seed": 23,
+      "num_envs": 1,
+      "steps": 4,
+      "chaos": true,
+      "passed": false,
+      "observation_shape": [
+        1,
+        24
+      ],
+      "observation_dim": 24,
+      "action_shape": [
+        5
+      ],
+      "action_dim": 5,
+      "physics_substeps_per_control": 10,
+      "reward_sum": NaN,
+      "reward_mean": NaN,
+      "reward_min": NaN,
+      "reward_max": NaN,
+      "reward_finite": false,
+      "observation_finite": false,
+      "first_nonfinite": {
+        "step": 1,
+        "nonfinite_fields": [
+          "observation",
+          "reward",
+          "qpos",
+          "qvel",
+          "xpos",
+          "geom_xpos"
+        ],
+        "field_stats": {
+          "observation": {
+            "numeric": true,
+            "shape": [
+              1,
+              24
+            ],
+            "dtype": "float32",
+            "finite": false,
+            "finite_count": 0,
+            "size": 24
+          },
+          "reward": {
+            "numeric": true,
+            "shape": [
+              1
+            ],
+            "dtype": "float32",
+            "finite": false,
+            "finite_count": 0,
+            "size": 1
+          },
+          "qpos": {
+            "numeric": true,
+            "shape": [
+              1,
+              14
+            ],
+            "dtype": "float32",
+            "finite": false,
+            "finite_count": 0,
+            "size": 14
+          },
+          "qvel": {
+            "numeric": true,
+            "shape": [
+              1,
+              13
+            ],
+            "dtype": "float32",
+            "finite": false,
+            "finite_count": 0,
+            "size": 13
+          },
+          "ctrl": {
+            "numeric": true,
+            "shape": [
+              1,
+              5
+            ],
+            "dtype": "float32",
+            "finite": true,
+            "finite_count": 5,
+            "size": 5,
+            "min": 0.0,
+            "max": 0.0,
+            "mean": 0.0
+          },
+          "xpos": {
+            "numeric": true,
+            "shape": [
+              1,
+              6,
+              3
+            ],
+            "dtype": "float32",
+            "finite": false,
+            "finite_count": 3,
+            "size": 18,
+            "min": 0.0,
+            "max": 0.0,
+            "mean": 0.0
+          },
+          "geom_xpos": {
+            "numeric": true,
+            "shape": [
+              1,
+              12,
+              3
+            ],
+            "dtype": "float32",
+            "finite": false,
+            "finite_count": 6,
+            "size": 36,
+            "min": 0.0,
+            "max": 0.4000000059604645,
+            "mean": 0.0833333358168602
+          },
+          "wind_force": {
+            "numeric": true,
+            "shape": [
+              1,
+              3
+            ],
+            "dtype": "float32",
+            "finite": true,
+            "finite_count": 3,
+            "size": 3,
+            "min": -8.375372886657715,
+            "max": 0.22420194745063782,
+            "mean": -3.0436675548553467
+          },
+          "push_force": {
+            "numeric": true,
+            "shape": [
+              1,
+              3
+            ],
+            "dtype": "float32",
+            "finite": true,
+            "finite_count": 3,
+            "size": 3,
+            "min": -13.893077850341797,
+            "max": 0.15680457651615143,
+            "mean": -6.139993667602539
+          },
+          "target_pos": {
+            "numeric": true,
+            "shape": [
+              1,
+              3
+            ],
+            "dtype": "float32",
+            "finite": true,
+            "finite_count": 3,
+            "size": 3,
+            "min": 0.16008193790912628,
+            "max": 0.30795803666114807,
+            "mean": 0.2584218978881836
+          },
+          "target_radius": {
+            "numeric": true,
+            "shape": [
+              1
+            ],
+            "dtype": "float32",
+            "finite": true,
+            "finite_count": 1,
+            "size": 1,
+            "min": 0.03999999910593033,
+            "max": 0.03999999910593033,
+            "mean": 0.03999999910593033
+          },
+          "last_action": {
+            "numeric": true,
+            "shape": [
+              1,
+              5
+            ],
+            "dtype": "float32",
+            "finite": true,
+            "finite_count": 5,
+            "size": 5,
+            "min": 0.0,
+            "max": 0.0,
+            "mean": 0.0
+          }
+        }
+      },
+      "terminated_counts": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "truncated_counts": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "dmcontrol_reference": {
+        "available": true,
+        "reward_sum": 0.4756283248593857,
+        "reward_mean": 0.11890708121484643,
+        "reward_finite": true
+      },
+      "jax_backend": "gpu",
+      "chaos_params": {
+        "enable_domain_randomization": true,
+        "enable_observation_noise": true,
+        "base_action_delay": 1,
+        "observation_noise_scale": 0.01,
+        "wind_scale": 5.0,
+        "push_scale": 25.0,
+        "slip_scale": 0.15,
+        "jitter_prob": 0.02
+      }
+    }
+  ]
+}

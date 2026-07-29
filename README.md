@@ -18,10 +18,14 @@ pip install -U "jax[cuda12]"
 
 Then, edit ```config.yaml``` and run ```train.py``` in the main project directory. Some examples:
 ```[bash]
-# gymnasium 
-python train.py env.backend=gymnasium env.env_id=HalfCheetah-v4 
+# gymnasium
+python -m tdmpc2_jax.train env.backend=gymnasium env.env_id=HalfCheetah-v4
 # dmcs
-python train.py env.backend=dmc env.env_id=cheetah-run   
+python -m tdmpc2_jax.train env.backend=dmc env.env_id=cheetah-run
+# mjx quadruped
+python -m tdmpc2_jax.train env.backend=mjx_dmc env.env_id=quadruped-run
+# NCC smoke test
+sbatch scripts/ncc_mjx_smoke.sbatch
 ```
 
 

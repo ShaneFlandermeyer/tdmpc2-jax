@@ -1,0 +1,43 @@
+{
+  "task": "cheetah-run",
+  "seed": 0,
+  "num_envs": 4,
+  "steps": 4,
+  "chaos": false,
+  "passed": true,
+  "observation_shape": [
+    4,
+    17
+  ],
+  "observation_dim": 17,
+  "action_shape": [
+    6
+  ],
+  "action_dim": 6,
+  "physics_substeps_per_control": 2,
+  "reward_sum": 0.2489941120147705,
+  "reward_mean": 0.015562132000923157,
+  "reward_min": 0.0,
+  "reward_max": 0.06436300277709961,
+  "reward_finite": true,
+  "observation_finite": true,
+  "terminated_counts": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "truncated_counts": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "dmcontrol_reference": {
+    "available": true,
+    "reward_sum": 0.0,
+    "reward_mean": 0.0,
+    "reward_finite": true
+  },
+  "jax_backend": "gpu"
+}

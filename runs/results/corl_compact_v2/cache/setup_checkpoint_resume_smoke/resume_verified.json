@@ -1,0 +1,7 @@
+{
+  "run_id": "setup_checkpoint_resume_smoke",
+  "env_id": "cartpole-swingup",
+  "first_checkpoint_step": 4096,
+  "second_checkpoint_step": 8192,
+  "passed": true
+}

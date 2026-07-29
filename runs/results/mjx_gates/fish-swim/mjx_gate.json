@@ -1,0 +1,37 @@
+{
+  "task": "fish-swim",
+  "seed": 0,
+  "num_envs": 2,
+  "steps": 1,
+  "chaos": false,
+  "passed": true,
+  "observation_shape": [
+    2,
+    24
+  ],
+  "observation_dim": 24,
+  "action_shape": [
+    5
+  ],
+  "action_dim": 5,
+  "physics_substeps_per_control": 10,
+  "reward_sum": 0.4742293953895569,
+  "reward_mean": 0.23711469769477844,
+  "reward_min": 0.23698794841766357,
+  "reward_max": 0.2372414469718933,
+  "reward_finite": true,
+  "observation_finite": true,
+  "terminated_counts": [
+    0
+  ],
+  "truncated_counts": [
+    0
+  ],
+  "dmcontrol_reference": {
+    "available": true,
+    "reward_sum": 0.11858412610438328,
+    "reward_mean": 0.11858412610438328,
+    "reward_finite": true
+  },
+  "jax_backend": "gpu"
+}

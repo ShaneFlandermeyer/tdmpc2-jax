@@ -1,0 +1,43 @@
+{
+  "task": "acrobot-swingup",
+  "seed": 0,
+  "num_envs": 4,
+  "steps": 4,
+  "chaos": false,
+  "passed": true,
+  "observation_shape": [
+    4,
+    6
+  ],
+  "observation_dim": 6,
+  "action_shape": [
+    1
+  ],
+  "action_dim": 1,
+  "physics_substeps_per_control": 1,
+  "reward_sum": 16.080825805664062,
+  "reward_mean": 1.005051612854004,
+  "reward_min": 0.007983320392668247,
+  "reward_max": 1.9994046688079834,
+  "reward_finite": true,
+  "observation_finite": true,
+  "terminated_counts": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "truncated_counts": [
+    0,
+    0,
+    0,
+    0
+  ],
+  "dmcontrol_reference": {
+    "available": true,
+    "reward_sum": 0.0185533659115572,
+    "reward_mean": 0.0046383414778893,
+    "reward_finite": true
+  },
+  "jax_backend": "gpu"
+}
